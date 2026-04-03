@@ -99,7 +99,7 @@ std::vector<float> cudaMultiply(std::vector<half>& A, std::vector<half>& B, int 
 
 //GPU function to get the index and jump value for a particular thread 
 //to tell it what items it needs to handle
-static __global__ void getIndexJump(int& index, int& jump){
+static __device__ void getIndexJump(int& index, int& jump){
     //get a unique index based on thread ID so that each thread handles its own index.
     index = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -121,7 +121,7 @@ static void getThreadsBlocks(int& threadsPerBlock, int& numBlocks, int size){
         //I might play around with how I distribute the threads in this case and see what 
         //is most efficient.
         //highest multiple of 32 for each block
-        threadsPerBlock = 1024
+        threadsPerBlock = 1024;
         numBlocks = static_cast<int>(ceil((double)size / 1024));
     }
 }
@@ -169,13 +169,13 @@ void cudaSigmoid(std::vector<float>& A){
 
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsedSecondsParallel = end - start;
-    std::cout<<"\n\nTime for multiplication with gpu: "<<elapsedSecondsParallel.count()<<"\n\n";
+    std::cout<<"\n\nTime for sigmoid with gpu: "<<elapsedSecondsParallel.count()<<"\n\n";
     return;
 }
 
 //Addition stuff, starting with kernel
 
-static __global__ void addKernel(float* A, float* B, float* C, n){
+static __global__ void addKernel(float* A, float* B, float* C, int n){
     int index, jump;
     getIndexJump(index, jump);
 
@@ -185,7 +185,7 @@ static __global__ void addKernel(float* A, float* B, float* C, n){
 }
 
 void cudaAdd(std::vector<float>& A, std::vector<float>& B, std::vector<float>& C, int M, int N){
-    float* d_A, *d_b, *d_C;
+    float* d_A, *d_B, *d_C;
     std::cout<<"Starting parallel addition...\n\n";
     auto start = std::chrono::high_resolution_clock::now();
     //allocate GPU memory for device arrays
@@ -196,7 +196,7 @@ void cudaAdd(std::vector<float>& A, std::vector<float>& B, std::vector<float>& C
     //copy host arrays in to device
     CUDA_CHECK(cudaMemcpy((void *) d_A, A.data(), M*N*sizeof(float), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy((void *) d_B, B.data(), M*N*sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy((void *) d_C, 0.0f, M*N*sizeof(float), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemset((void *) d_C, 0, M*N*sizeof(float)));
 
     int threadsPerBlock, numBlocks;
     getThreadsBlocks(threadsPerBlock, numBlocks, M*N);
@@ -214,7 +214,7 @@ void cudaAdd(std::vector<float>& A, std::vector<float>& B, std::vector<float>& C
 
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsedSecondsParallel = end - start;
-    std::cout<<"\n\nTime for multiplication with gpu: "<<elapsedSecondsParallel.count()<<"\n\n";
+    std::cout<<"\n\nTime for addition with gpu: "<<elapsedSecondsParallel.count()<<"\n\n";
     
     return;
 }
