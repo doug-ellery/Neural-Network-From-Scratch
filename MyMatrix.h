@@ -4,9 +4,10 @@
 #ifndef MYMATRIX_H
 #define MYMATRIX_H
 
-class MyMatrix{
-    public:    
-        static std::vector<float> cudaMultiply(std::vector<half>& A, std::vector<half>& B, int M, int N, int K);
-};
+ 
+std::vector<float> cudaMultiply(std::vector<half>&, std::vector<half>&, int, int, int);
+void cudaSigmoid(std::vector<float>&);
+void cudaAdd(std::vector<float>&, std::vector<float>&, std::vector<float>&, int, int)
+
 
 #endif

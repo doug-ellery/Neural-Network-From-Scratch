@@ -16,7 +16,7 @@ int main(){
     for(int i = 0; i < B.size(); i++){
         B[i] = __float2half(static_cast<float>(rand()) / RAND_MAX);
     }
-    std::vector<float> correctAnswer(M*N,0.0f);
+    /*std::vector<float> correctAnswer(M*N,0.0f);
     std::cout<<"Starting non parallel multiplication...\n\n";
     auto start1 = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < M; i++) {
@@ -28,28 +28,24 @@ int main(){
     }
     auto end1 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsedSecondsNonParallel = end1 - start1;
-    //for(int r = 0; r < M; r++){
-    //    for(int c = 0; c < N; c++){
-    //        std::cout<<correctAnswer[r*N + c]<<" ";
-     //   }
-      //  std::cout<<"\n";
-    //}
+
     std::cout<<"\n\nTime for multiplication without gpu: "<<elapsedSecondsNonParallel.count()<<"\n\n";
+    */
     
-    std::cout<<"Starting parallel multiplication...\n\n";
+    std::vector<float> C = cudaMultiply(A, B, M, N, K);
 
-    auto start2 = std::chrono::high_resolution_clock::now();
-    std::vector<float> C = MyMatrix::cudaMultiply(A, B, M, N, K);
-    auto end2 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsedSecondsParallel = end2 - start2;
-    //for(int r = 0; r < M; r++){
-     //   for(int c = 0; c < N; c++){
-       //     std::cout<<C[r*N + c]<<" ";
-        //}
-       // std::cout<<"\n";
-    //}
-    std::cout<<"\n\nTime for multiplication with gpu: "<<elapsedSecondsParallel.count()<<"\n\n";
+    cudaSigmoid(C);
+
+    std::vector<float> X(M*N), Y(M*N), Z(M*N);
+    for(int i = 0; i < X.size(); i++){
+        X[i] = static_cast<float>(rand()) / RAND_MAX;
+        Y[i] = static_cast<float>(rand()) / RAND_MAX;
+    }
+    
+    cudaAdd(X, Y, Z, M, N);
+
+    
+    
     return 0;
-
 
 }
