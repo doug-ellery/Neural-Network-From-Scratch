@@ -5,27 +5,9 @@
 #include <cublas_v2.h>
 #include <cuda_fp16.h>
 #include "MyMatrix.h"
+#include <curand_kernel.h>
 
-//Helper macros for CUDA
-#define CUDA_CHECK(call) \
-{ \
-    cudaError_t err = call; \
-    if(err != cudaSuccess) { \
-        std::cerr << "CUDA Error: " << cudaGetErrorString(err) \
-                  << " at line " << __LINE__ << std::endl; \
-        exit(EXIT_FAILURE); \
-    } \
-}
 
-// Helper macro for cuBLAS errors
-#define CUBLAS_CHECK(call) \
-{ \
-    cublasStatus_t err = call; \
-    if(err != CUBLAS_STATUS_SUCCESS) { \
-        std::cerr << "cuBLAS Error at line " << __LINE__ << std::endl; \
-        exit(EXIT_FAILURE); \
-    } \
-}
 
 //multiply two matrices A and B, where A = M x K, B = K x N
 std::vector<float> cudaMultiply(std::vector<half>& A, std::vector<half>& B, int M, int N, int K){
@@ -99,7 +81,7 @@ std::vector<float> cudaMultiply(std::vector<half>& A, std::vector<half>& B, int 
 
 //GPU function to get the index and jump value for a particular thread 
 //to tell it what items it needs to handle
-static __device__ void getIndexJump(int& index, int& jump){
+__device__ void getIndexJump(int& index, int& jump){
     //get a unique index based on thread ID so that each thread handles its own index.
     index = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -108,7 +90,7 @@ static __device__ void getIndexJump(int& index, int& jump){
 }
 
 //function to get threads per block and number of blocks
-static void getThreadsBlocks(int& threadsPerBlock, int& numBlocks, int size){
+void getThreadsBlocks(int& threadsPerBlock, int& numBlocks, int size){
     //if we have 1024 elements or less, we can have enough threads in 1 block to handle 
     //everything
     if(size <= 1024){
@@ -217,6 +199,28 @@ void cudaAdd(std::vector<float>& A, std::vector<float>& B, std::vector<float>& C
     std::cout<<"\n\nTime for addition with gpu: "<<elapsedSecondsParallel.count()<<"\n\n";
     
     return;
+}
+
+//Kernel to help initialize the weights for a layer, using He initialization
+__global__ void weightInitializeKernel(float* weights, int size, int n_in, unsigned long seed){
+    int index, jump;
+    getIndexJump(index,jump);
+    if(index < size){
+        for(int i = index; i < size; i += jump){
+            //create RNG state
+            curandState state;
+            curand_init(seed, i, 0, &state);
+
+            //He Normal Scaling, which works by using the property that for a standard
+            //gaussian RV, X = N(0,1), if we multiply by a we get a*X = N(0,a^2). For He normal,
+            //we want the random variable: N(0,2/n_in), so we can multiply the standard gaussian 
+            //by sqrt(2/n_in) to get this. 
+            float sigma = sqrtf(2.0f / n_in);
+            float rand_num = curand_normal(&state);
+            weights[i] = rand_num * sigma;
+
+        }
+    }
 }
 
 
