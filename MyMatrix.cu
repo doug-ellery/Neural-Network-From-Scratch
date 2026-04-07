@@ -223,4 +223,16 @@ __global__ void weightInitializeKernel(float* weights, int size, int n_in, unsig
     }
 }
 
+//ReLU = Rectified Linear Unit => f(x) = max(0, x)
+__global__ void reluActivationKernel(float* layer, int size){
+    int index, jump;
+    getIndexJump(index, jump);
+
+    for(int i = index; i < size; i += jump){
+        if(layer[i] < 0.0f){
+            layer[i] = 0.0f;
+        }
+    }
+}
+
 
