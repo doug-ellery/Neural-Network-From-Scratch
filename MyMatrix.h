@@ -25,11 +25,11 @@
     } \
 }
 
-std::vector<float> cudaMultiply(std::vector<half>&, std::vector<half>&, int, int, int);
-void cudaSigmoid(std::vector<float>&);
-void cudaAdd(std::vector<float>&, std::vector<float>&, std::vector<float>&, int, int);
-__device__ void getIndexJump(int&, int&);
-__global__ void weightInitializeKernel(float*, int, int unsigned long);
-void getThreadsBlocks(int&, int&, int);
+void cudaMultiply(float* d_A, float* d_B, float* d_C, int M, int N, int K);
+__device__ void getIndexJump(int& index, int& jump);
+void getThreadsBlocks(int& threadsPerBlock, int& numBlocks, int size);
+void cudaAdd(float* A, float* B, int M, int N);
+__global__ void weightInitializeKernel(float* weights, int size, int n_in, unsigned long seed);
+void cudaReLUActivation(float* A, int size);
 
 #endif

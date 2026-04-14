@@ -10,25 +10,8 @@
 
 
 //multiply two matrices A and B, where A = M x K, B = K x N
-std::vector<float> cudaMultiply(std::vector<half>& A, std::vector<half>& B, int M, int N, int K){
-    //output array C = M x N
-    std::vector<float> C(M*N,0.0f);
-
-    //device (GPU) matrices, C will be output
-    half* d_A;
-    half* d_B;
-    float* d_C;
-    std::cout<<"Starting parallel multiplication...\n\n";
-    auto start = std::chrono::high_resolution_clock::now();
-    //allocate space for matrices on GPU, M = Rows of A and C, K = columns of A, 
-    //rows of B, N = columns of B and C
-    CUDA_CHECK(cudaMalloc((void**)&d_A, M*K*sizeof(half)));
-    CUDA_CHECK(cudaMalloc((void**)&d_B, K*N*sizeof(half)));
-    CUDA_CHECK(cudaMalloc((void**)&d_C, M*N*sizeof(float)));
-
-    //Copy A, B, & C to device (GPU)
-    CUDA_CHECK(cudaMemcpy(d_A, A.data(), M*K*sizeof(half), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_B, B.data(), K*N*sizeof(half), cudaMemcpyHostToDevice));
+void cudaMultiply(float* d_A, float* d_B, float* d_C, int M, int N, int K){
+    //output array d_C = M x N
     CUDA_CHECK(cudaMemset(d_C, 0, M*N*sizeof(float)));
 
     //CUBLAS handle initialize
@@ -62,21 +45,6 @@ std::vector<float> cudaMultiply(std::vector<half>& A, std::vector<half>& B, int 
         CUBLAS_GEMM_DEFAULT_TENSOR_OP   //use tensor cores for math
     ));
 
-    //copy result back into host (C array)
-    CUDA_CHECK(cudaMemcpy(C.data(), d_C, M*N*sizeof(float), cudaMemcpyDeviceToHost));
-
-    //clean up memory
-    CUBLAS_CHECK(cublasDestroy(handle));
-    CUDA_CHECK(cudaFree(d_A));
-    CUDA_CHECK(cudaFree(d_B));
-    CUDA_CHECK(cudaFree(d_C));
-
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsedSecondsParallel = end - start;
-    std::cout<<"\n\nTime for multiplication with gpu: "<<elapsedSecondsParallel.count()<<"\n\n";
-
-    //return result
-    return C;
 }
 
 //GPU function to get the index and jump value for a particular thread 
@@ -108,97 +76,34 @@ void getThreadsBlocks(int& threadsPerBlock, int& numBlocks, int size){
     }
 }
 
-
-//Sigmoid stuff, starting with the sigmoid kernel which defines the 
-//operation of a single thread for applying the sigmoid function.
-//__global__ tells compiler this code is meant for the GPU.
-//n is size of matrix
-
-static __global__ void sigmoidKernel(float* A, int n){
-    int index, jump;
-    getIndexJump(index, jump);
-
-    //its possible for index to be out of valid range, because not all threads will necessarily
-    //be used, so make sure i < n, but also if we have more matrix items than threads, one 
-    //thread may have to handle multiple matrix items, so we should jump our index by the total
-    //number of threads to figure out the next one we need to handle
-    for(int i = index; i < n; i += jump){
-        A[i] = 1.0f / (1.0f + expf(-1 * A[i]));
-    }
-}
-
-void cudaSigmoid(std::vector<float>& A){
-    int size = A.size();
-    float* d_A;
-    std::cout<<"Starting parallel sigmoid...\n\n";
-    auto start = std::chrono::high_resolution_clock::now();
-    //Allocate memory for our matrix and copy it onto the gpu memory
-    CUDA_CHECK(cudaMalloc((void **) &d_A, size*sizeof(float)));
-    CUDA_CHECK(cudaMemcpy((void *) d_A, A.data(), size*sizeof(float), cudaMemcpyHostToDevice));
-
-    int threadsPerBlock, numBlocks;
-    getThreadsBlocks(threadsPerBlock, numBlocks, size);
-
-    //Call our kernel using threads based on values of threadsPerBlock and numBlocks
-    sigmoidKernel<<<numBlocks, threadsPerBlock>>>(d_A, size);
-
-    //Wait for GPU to finish
-    cudaDeviceSynchronize();
-
-    //copy d_A back in to A and get rid of d_A on GPU
-    CUDA_CHECK(cudaMemcpy((void *) A.data(), d_A, size*sizeof(float), cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaFree(d_A));
-
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsedSecondsParallel = end - start;
-    std::cout<<"\n\nTime for sigmoid with gpu: "<<elapsedSecondsParallel.count()<<"\n\n";
-    return;
-}
-
 //Addition stuff, starting with kernel
+//total size of A in A + B = size, A = m x n, but I only need n to extract the row index from
+//it 
 
-static __global__ void addKernel(float* A, float* B, float* C, int n){
+static __global__ void addKernel(float* A, float* B, int size, int n){
     int index, jump;
     getIndexJump(index, jump);
-
-    for(int i = index; i < n; i += jump){
-        C[i] = A[i] + B[i];
+    int row = -1;
+    for(int i = index; i < size; i += jump){
+        //figure out what row in A we are in first, this tells us what element to add to it 
+        //from B
+        row = i / n;
+        A[i] = A[i] + B[row];
     }
 }
 
-void cudaAdd(std::vector<float>& A, std::vector<float>& B, std::vector<float>& C, int M, int N){
-    float* d_A, *d_B, *d_C;
-    std::cout<<"Starting parallel addition...\n\n";
-    auto start = std::chrono::high_resolution_clock::now();
-    //allocate GPU memory for device arrays
-    CUDA_CHECK(cudaMalloc((void **) &d_A, M*N*sizeof(float)));
-    CUDA_CHECK(cudaMalloc((void **) &d_B, M*N*sizeof(float)));
-    CUDA_CHECK(cudaMalloc((void **) &d_C, M*N*sizeof(float)));
-
-    //copy host arrays in to device
-    CUDA_CHECK(cudaMemcpy((void *) d_A, A.data(), M*N*sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy((void *) d_B, B.data(), M*N*sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemset((void *) d_C, 0, M*N*sizeof(float)));
+//Add an M x N and an M x 1 matrix
+//Effectivley I am adding an M x N matrix to an M x N matrix, but the second matrix is N 
+//identical columns, because it will be N columns of the biases for a given layer, which I
+//need for broadcasting in order to pull off the vectorization
+//Result is stored in A, so that no extra memory is used
+void cudaAdd(float* A, float* B, int M, int N){
 
     int threadsPerBlock, numBlocks;
     getThreadsBlocks(threadsPerBlock, numBlocks, M*N);
 
     //call adding kernel
-    addKernel<<<numBlocks, threadsPerBlock>>>(d_A, d_B, d_C, M*N);
-
-    //copy result in to C
-    CUDA_CHECK(cudaMemcpy((void *) C.data(), d_C, M*N*sizeof(float), cudaMemcpyDeviceToHost));
-
-    //free up memory
-    CUDA_CHECK(cudaFree(d_A));
-    CUDA_CHECK(cudaFree(d_B));
-    CUDA_CHECK(cudaFree(d_C));
-
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsedSecondsParallel = end - start;
-    std::cout<<"\n\nTime for addition with gpu: "<<elapsedSecondsParallel.count()<<"\n\n";
-    
-    return;
+    addKernel<<<numBlocks, threadsPerBlock>>>(d_A, d_B, M*N, N);
 }
 
 //Kernel to help initialize the weights for a layer, using He initialization
@@ -224,7 +129,7 @@ __global__ void weightInitializeKernel(float* weights, int size, int n_in, unsig
 }
 
 //ReLU = Rectified Linear Unit => f(x) = max(0, x)
-__global__ void reluActivationKernel(float* layer, int size){
+static __global__ void reluActivationKernel(float* layer, int size){
     int index, jump;
     getIndexJump(index, jump);
 
@@ -233,6 +138,14 @@ __global__ void reluActivationKernel(float* layer, int size){
             layer[i] = 0.0f;
         }
     }
+}
+
+void cudaReLUActivation(float* A, int size){
+    int threadsPerBlock, numBlocks;
+    getThreadsBlocks(threadsPerBlock, numBlocks, size);
+
+    //call ReLU kernel
+    reluActivationKernel<<<numBlocks, threadsPerBlock>>>(A, size);
 }
 
 

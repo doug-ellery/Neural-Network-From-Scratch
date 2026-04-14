@@ -4,9 +4,10 @@
 
 class Layer{
     float* weights, *biases;
-    int n_in, n_out;
+    int n_in, n_out, samples;
     public:
-        Layer(int, int);
+        Layer(int, int, int);
+        float* getNextLayer(float*);
         ~Layer();
 };
 
