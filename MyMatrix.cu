@@ -10,9 +10,16 @@
 
 
 //multiply two matrices A and B, where A = M x K, B = K x N
-void cudaMultiply(float* d_A, float* d_B, float* d_C, int M, int N, int K){
+void cudaMultiply(float* A, float* B, float* d_C, int M, int N, int K){
     //output array d_C = M x N
     CUDA_CHECK(cudaMemset(d_C, 0, M*N*sizeof(float)));
+    
+    //we need to use the __half versions of A and B
+    __half* d_A, *d_B;
+    CUDA_CHECK(cudaMalloc(&d_A, M*K*sizeof(__half)));
+    CUDA_CHECK(cudaMalloc(&d_B, K*N*sizeof(__half)));
+    floatToHalfCast(A, d_A, M*K);
+    floatToHalfCast(B, d_B, K*N);
 
     //CUBLAS handle initialize
     cublasHandle_t handle;
@@ -146,6 +153,22 @@ void cudaReLUActivation(float* A, int size){
 
     //call ReLU kernel
     reluActivationKernel<<<numBlocks, threadsPerBlock>>>(A, size);
+}
+
+static __global__ void floatToHalfKernel(float* in, __half* out, int size){
+    int index, jump;
+    getIndexJump(index, jump);
+    for(int i = index; i < size; i += jump){
+        out[i] = __float2half(in[i]);
+    }
+}
+
+static floatToHalfCast(float* in, __half* out, int size){
+    int threadsPerBlock, numBlocks;
+    getThreadsBlocks(threadsPerBlock, numBlocks, size);
+
+    //call floatToHalfKernel
+    floatToHalfKernel<<<numBlocks, threadsPerBlock>>>(in, out, size);
 }
 
 

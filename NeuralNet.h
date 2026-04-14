@@ -7,7 +7,7 @@
 class NeuralNet{
     std::vector<Layer> layers;
     public:
-        NeuralNet();
+        NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples);
         ~NeuralNet();
 };
 
