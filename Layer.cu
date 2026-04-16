@@ -35,7 +35,7 @@ Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples){
 //return the values for this layer
 
 
-Layer::float* getNextLayer(float* prevLayer){
+float* Layer::getNextLayer(float* prevLayer){
     float* nextLayer;
     CUDA_CHECK(cudaMalloc((void **) &nextLayer, n_out*samples*sizeof(float)));
     //multiply weights x prevLayer first
