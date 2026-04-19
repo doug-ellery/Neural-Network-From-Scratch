@@ -29,6 +29,25 @@ Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples){
 
     //call our He normal kernel
     weightInitializeKernel<<<numBlocks, threadsPerBlock>>>(weights, n_in * n_out, n_in, seed);
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
+}
+
+//Move constructor so that std::vector uses std::move when I call push_back, instead of a normal
+//copy operation
+Layer::Layer(Layer&& other) noexcept {
+    weights = other.weights;
+    biases = other.biases;
+
+    n_in = other.n_in;
+    n_out = other.n_out;
+    samples = other.samples;
+    other.n_in = 0;
+    other.n_out = 0;
+    other.samples = 0;
+
+    other.weights = nullptr;
+    other.biases = nullptr;
 }
 
 //getNextLayer will use the weights, biases, and activation to get us the next layer and 
@@ -38,8 +57,11 @@ Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples){
 float* Layer::getNextLayer(float* prevLayer){
     float* nextLayer;
     CUDA_CHECK(cudaMalloc((void **) &nextLayer, n_out*samples*sizeof(float)));
+    std::cout << "nextLayer ptr: " << nextLayer << std::endl;
     //multiply weights x prevLayer first
     cudaMultiply(weights, prevLayer, nextLayer, n_out, samples, n_in);
+    CUDA_CHECK(cudaDeviceSynchronize());
+    std::cout << "after multiply OK" << std::endl;
     CUDA_CHECK(cudaFree(prevLayer));
 
     //Add this matrix and biases
@@ -51,6 +73,7 @@ float* Layer::getNextLayer(float* prevLayer){
 
 
 Layer::~Layer(){
+    std::cout << "Freeing weights: " << weights << std::endl;
     CUDA_CHECK(cudaFree(weights));
     CUDA_CHECK(cudaFree(biases));
 }

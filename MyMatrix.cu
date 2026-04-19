@@ -30,8 +30,8 @@ void cudaMultiply(float* A, float* B, float* d_C, int M, int N, int K){
 
     //scalars which cublas uses in the equation C = alpha*A*B + beta*C
     //we just want C = A*B, so set alpha/beta accordingly
-    float alpha = 1.0f;
-    float beta = 0.0f;
+    const float alpha = 1.0f;
+    const float beta = 0.0f;
 
     //GPU uses column major indexing, so we will compute B^t * A^t which equals C^t
     //which is the column major version of C, so when we read it back into the program,
@@ -48,9 +48,14 @@ void cudaMultiply(float* A, float* B, float* d_C, int M, int N, int K){
         (const void*) d_A, CUDA_R_16F, K,    //feeding A second with leading dimension (cols)
         (const void*) &beta,
         d_C, CUDA_R_32F, N,
-        CUDA_R_32F,
+        CUBLAS_COMPUTE_32F_FAST_TF32,
         CUBLAS_GEMM_DEFAULT_TENSOR_OP   //use tensor cores for math
     ));
+    CUDA_CHECK(cudaDeviceSynchronize()); 
+    
+    //Get rid of the half arrays
+    CUDA_CHECK(cudaFree(d_A));
+    CUDA_CHECK(cudaFree(d_B));
 
 }
 
@@ -110,7 +115,7 @@ void cudaAdd(float* A, float* B, int M, int N){
     getThreadsBlocks(threadsPerBlock, numBlocks, M*N);
 
     //call adding kernel
-    addKernel<<<numBlocks, threadsPerBlock>>>(d_A, d_B, M*N, N);
+    addKernel<<<numBlocks, threadsPerBlock>>>(A, B, M*N, N);
 }
 
 //Kernel to help initialize the weights for a layer, using He initialization
@@ -163,7 +168,7 @@ static __global__ void floatToHalfKernel(float* in, __half* out, int size){
     }
 }
 
-static floatToHalfCast(float* in, __half* out, int size){
+void floatToHalfCast(float* in, __half* out, int size){
     int threadsPerBlock, numBlocks;
     getThreadsBlocks(threadsPerBlock, numBlocks, size);
 

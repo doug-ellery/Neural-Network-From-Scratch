@@ -8,10 +8,15 @@
 class NeuralNet{
     std::vector<Layer> layers;
     float* inputs;
+    int numSamples, outputSize;
     public:
-        NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>);
+        NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>&);
         std::vector<float> forwardPass();
         ~NeuralNet();
+
+        //Delete copying operators for this class
+        NeuralNet(const NeuralNet&) = delete;
+        NeuralNet& operator=(const NeuralNet&) = delete;
 };
 
 #endif

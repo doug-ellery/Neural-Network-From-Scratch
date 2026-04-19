@@ -31,5 +31,6 @@ void getThreadsBlocks(int& threadsPerBlock, int& numBlocks, int size);
 void cudaAdd(float* A, float* B, int M, int N);
 __global__ void weightInitializeKernel(float* weights, int size, int n_in, unsigned long seed);
 void cudaReLUActivation(float* A, int size);
+void floatToHalfCast(float* in, __half* out, int size);
 
 #endif
