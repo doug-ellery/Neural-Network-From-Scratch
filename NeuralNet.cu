@@ -30,9 +30,8 @@ std::vector<float> NeuralNet::forwardPass(){
     float* prev = layers[0].getNextLayer(inputs);
     float* curr = nullptr;
     for(int i = 1; i < layers.size(); i++){
+        std::cout<<"Loop "<<i<<"starting...\n";
         curr = layers[i].getNextLayer(prev);
-        std::cout << "prev ptr: " << prev << std::endl;
-        CUDA_CHECK(cudaFree(prev));
         prev = curr;
     }
     float* output = prev;

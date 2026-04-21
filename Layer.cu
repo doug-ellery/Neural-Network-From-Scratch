@@ -17,9 +17,9 @@ Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples){
     samples = numSamples;
     CUDA_CHECK(cudaMalloc((void **)&weights, n_in * n_out *sizeof(float)));
     CUDA_CHECK(cudaMalloc((void **)&biases, n_out * sizeof(float)));
-
+    
     //biases can be initialized to 0
-    CUDA_CHECK(cudaMemset((void *)biases, 0, n_out * sizeof(float)));
+    CUDA_CHECK(cudaMemset((void *)biases, 0.0, n_out * sizeof(float)));
 
     //weights cannot, use He normal initialization because we are using ReLU for now as the activation function
     CUDA_CHECK(cudaMemset((void *)weights, 0, n_in * n_out * sizeof(float)));
@@ -57,12 +57,11 @@ Layer::Layer(Layer&& other) noexcept {
 float* Layer::getNextLayer(float* prevLayer){
     float* nextLayer;
     CUDA_CHECK(cudaMalloc((void **) &nextLayer, n_out*samples*sizeof(float)));
-    std::cout << "nextLayer ptr: " << nextLayer << std::endl;
     //multiply weights x prevLayer first
     cudaMultiply(weights, prevLayer, nextLayer, n_out, samples, n_in);
     CUDA_CHECK(cudaDeviceSynchronize());
-    std::cout << "after multiply OK" << std::endl;
     CUDA_CHECK(cudaFree(prevLayer));
+    
 
     //Add this matrix and biases
     cudaAdd(nextLayer, biases, n_out, samples);
@@ -71,9 +70,28 @@ float* Layer::getNextLayer(float* prevLayer){
     return nextLayer;
 }
 
+//Helper function for debugging, weights is 
+void Layer::printWeights(){
+    std::vector<float> printer(n_out*n_in, 0);
+    std::cout<<"Weights: \n";
+    CUDA_CHECK(cudaMemcpy(printer.data(), weights, n_out*n_in*sizeof(float), cudaMemcpyDeviceToHost));
+    for(int r = 0; r < n_out; r++){
+        for(int c = 0; c < n_in; c++){
+            std::cout<<printer[n_in*r + c]<<"  ";
+        }
+        std::cout<<"\n";
+    }
+}
+
+void Layer::setBiases(std::vector<float> hardcodedBiases){
+    CUDA_CHECK(cudaMemcpy((void *)biases, hardcodedBiases.data(), n_out*sizeof(float), cudaMemcpyHostToDevice));
+}
+
+void Layer::setWeights(std::vector<float> hardcodedWeights){
+    CUDA_CHECK(cudaMemcpy((void *)weights, hardcodedWeights.data(), n_out*n_in*sizeof(float), cudaMemcpyHostToDevice));
+}
 
 Layer::~Layer(){
-    std::cout << "Freeing weights: " << weights << std::endl;
     CUDA_CHECK(cudaFree(weights));
     CUDA_CHECK(cudaFree(biases));
 }

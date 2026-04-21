@@ -5,19 +5,24 @@
 #include <vector>
 
 int main(){
-    std::vector<float> inputs = {2.0,3.0,4.0,7.0,8.0,9.0,10.0,11.0,12.0};
-    NeuralNet testNet(1, 4, 3, 1, 3, inputs);
+    int numSamples = 10;
+    int inputSize = 100;
+    int numHiddenLayers = 20;
+    int nodesPerLayer = 1200;
+    int outputSize = 4;
+    std::vector<float> inputs;
+    for(int i = 0; i < inputSize * numSamples; i++){
+        inputs.push_back(i);
+    }
+    NeuralNet testNet(numHiddenLayers, nodesPerLayer, inputSize, outputSize, numSamples, inputs);
     std::vector<float> outputs = testNet.forwardPass();
-    for(int r = 0; r < 1; r++){
-        for(int c = 0; c < 3; c++){
-            std::cout<<outputs[r + c];
+    for(int r = 0; r < outputSize; r++){
+        for(int c = 0; c < numSamples; c++){
+            std::cout<<outputs[r*numSamples + c]<<" ";
         }
         std::cout<<"\n";
     }
-    std::cout << "\n\n";
-    for(int i = 0; i < outputs.size(); i++){
-        std::cout<<outputs[i];
-    }
+    std::cout<<"\n\n";
     
     return 0;
 

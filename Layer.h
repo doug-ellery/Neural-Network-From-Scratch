@@ -1,3 +1,4 @@
+#include <vector>
 
 #ifndef LAYER_H
 #define LAYER_H
@@ -7,8 +8,11 @@ class Layer{
     int n_in, n_out, samples;
     public:
         Layer(int, int, int);
-        Layer::Layer(Layer&& other) noexcept;
+        Layer(Layer&& other) noexcept;
         float* getNextLayer(float*);
+        void Layer::setWeights(std::vector<float> hardcodedWeights);
+        void Layer::setBiases(std::vector<float> hardcodedBiases);
+        void printWeights();
         ~Layer();
 
         //Don't allow layers to be copied, this causes wierd stuff to happen because we 
