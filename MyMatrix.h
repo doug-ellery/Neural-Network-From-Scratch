@@ -32,5 +32,6 @@ void cudaAdd(float* A, float* B, int M, int N);
 __global__ void weightInitializeKernel(float* weights, int size, int n_in, unsigned long seed);
 void cudaReLUActivation(float* A, int size);
 void floatToHalfCast(float* in, __half* out, int size);
+__global__ void costKernel(float* predictions, float* correctOnes, float* cost, int numSamples, int outputSize);
 
 #endif

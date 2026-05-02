@@ -6,6 +6,8 @@
 class Layer{
     float* weights, *biases;
     int n_in, n_out, samples;
+    //For my forward pass logic, so I know whether or not to apply activation
+    bool lastLayer;
     public:
         Layer(int, int, int);
         Layer(Layer&& other) noexcept;

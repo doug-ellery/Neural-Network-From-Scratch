@@ -7,11 +7,12 @@
 
 class NeuralNet{
     std::vector<Layer> layers;
-    float* inputs;
+    float* inputs, *predictions, *correctOutputs;
     int numSamples, outputSize;
     public:
-        NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>&);
+        NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>&, std::vector<float>&);
         std::vector<float> forwardPass();
+        void getCost();
         ~NeuralNet();
 
         //Delete copying operators for this class

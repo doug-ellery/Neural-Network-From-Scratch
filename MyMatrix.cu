@@ -1,5 +1,5 @@
 #include <iostream>
-#include <cmath>
+#include <math.h>
 #include <chrono>
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
@@ -175,5 +175,21 @@ void floatToHalfCast(float* in, __half* out, int size){
     //call floatToHalfKernel
     floatToHalfKernel<<<numBlocks, threadsPerBlock>>>(in, out, size);
 }
+
+/*Kernel for calculating the cost function, using log loss, where I sum 
+up actual*log(predicted) for all data points, and then multiply by -1/number of samples
+*/
+__global__ void costKernel(float* predictions, float* correctOnes, float* cost, int numSamples, int outputSize){
+    int index, jump;
+    getIndexJump(index, jump);
+    for(int i = index; i < numSamples*outputSize; i += jump){
+        //Key: use atomic addition because multiple threads may be trying to add 
+        //to cost at the same time, so this avoids race conditions that can lead to wrong answers
+        //atomicAdd(cost, (-1.0f)*correctOnes[index]*__logf(predictions[index])/(float)numSamples);
+        atomicAdd(cost, (1.0f)/numSamples*(predictions[index] - correctOnes[index])*(predictions[index] - correctOnes[index]));
+    }
+}
+
+
 
 

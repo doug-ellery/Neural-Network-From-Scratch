@@ -5,7 +5,7 @@
 #include <ctime>
 #include <cuda_runtime.h>
 
-Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples){
+Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples, bool lastLayer){
     //n_in = how many nodes are in our layer, n_out = how many nodes are in the next layer,
     //ie. how many weights each node needs to have. n_out = how many nodes are in the next layer,
     //and in this design, biases is going to be the biases for the next layer, just how the 
@@ -15,6 +15,7 @@ Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples){
     n_in = nodesThisLayer;
     n_out = nodesNextLayer;
     samples = numSamples;
+    this->lastLayer = lastLayer;
     CUDA_CHECK(cudaMalloc((void **)&weights, n_in * n_out *sizeof(float)));
     CUDA_CHECK(cudaMalloc((void **)&biases, n_out * sizeof(float)));
     
