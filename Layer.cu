@@ -66,7 +66,10 @@ float* Layer::getNextLayer(float* prevLayer){
 
     //Add this matrix and biases
     cudaAdd(nextLayer, biases, n_out, samples);
-    cudaReLUActivation(nextLayer, n_out * samples);
+    if(!lastLayer){
+        cudaReLUActivation(nextLayer, n_out * samples);
+    }
+    
 
     return nextLayer;
 }

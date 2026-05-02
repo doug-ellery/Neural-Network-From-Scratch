@@ -9,7 +9,7 @@ class Layer{
     //For my forward pass logic, so I know whether or not to apply activation
     bool lastLayer;
     public:
-        Layer(int, int, int);
+        Layer(int, int, int, bool);
         Layer(Layer&& other) noexcept;
         float* getNextLayer(float*);
         void Layer::setWeights(std::vector<float> hardcodedWeights);

@@ -10,15 +10,15 @@ NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize
     this->outputSize = outputSize;
     //create input layer weights
     layers.reserve(numHiddenLayers + 1);
-    layers.push_back(Layer(inputSize, nodesPerHiddenLayer, numSamples));
+    layers.push_back(Layer(inputSize, nodesPerHiddenLayer, numSamples, false));
     int i = 0;
     //create hidden layer weights
     while(i < numHiddenLayers - 1){
-        layers.push_back(Layer(nodesPerHiddenLayer, nodesPerHiddenLayer, numSamples));
+        layers.push_back(Layer(nodesPerHiddenLayer, nodesPerHiddenLayer, numSamples, false));
         i++;
     }
     //create weights that take us to output layer
-    layers.push_back(Layer(nodesPerHiddenLayer, outputSize, numSamples));
+    layers.push_back(Layer(nodesPerHiddenLayer, outputSize, numSamples, true));
     //get values of first layer onto GPU
     CUDA_CHECK(cudaMalloc(&inputs, inputSize * numSamples * sizeof(float)));
     CUDA_CHECK(cudaMemcpy(inputs, data.data(), inputSize * numSamples * sizeof(float), cudaMemcpyHostToDevice));
@@ -45,6 +45,7 @@ std::vector<float> NeuralNet::forwardPass(){
     CUDA_CHECK(cudaMemcpy(outVec.data(), predictions, numSamples * outputSize * sizeof(float), cudaMemcpyDeviceToHost));
     return outVec;
 }
+
 
 void NeuralNet::getCost(){
     //Get a cost variable onto the GPU
