@@ -6,6 +6,8 @@
 class Layer{
     float* weights, *biases;
     int n_in, n_out, samples;
+    //activation and preactivation arrays that we'll get from computing the next layer
+    float* a, *z;
     //For my forward pass logic, so I know whether or not to apply activation
     bool lastLayer;
     public:
@@ -14,7 +16,10 @@ class Layer{
         float* getNextLayer(float*);
         void Layer::setWeights(std::vector<float> hardcodedWeights);
         void Layer::setBiases(std::vector<float> hardcodedBiases);
+        void printActivation();
         void printWeights();
+        void printPreActivation();
+        void Layer::printNodes();
         ~Layer();
 
         //Don't allow layers to be copied, this causes wierd stuff to happen because we 

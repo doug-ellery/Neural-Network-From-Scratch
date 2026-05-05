@@ -8,7 +8,7 @@
 class NeuralNet{
     
     float* inputs, *predictions, *correctOutputs;
-    int numSamples, outputSize;
+    int numSamples, outputSize, inputSize;
     public:
         std::vector<Layer> layers;
         NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>&, std::vector<float>&);

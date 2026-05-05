@@ -8,6 +8,7 @@
 NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>& data, std::vector<float>& outputs){
     this->numSamples = numSamples;
     this->outputSize = outputSize;
+    this->inputSize = inputSize;
     //create input layer weights
     layers.reserve(numHiddenLayers + 1);
     layers.push_back(Layer(inputSize, nodesPerHiddenLayer, numSamples, false));
@@ -33,11 +34,20 @@ NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize
 
 
 std::vector<float> NeuralNet::forwardPass(){
+    std::cout<<"Layer 0 nodes: \n";
+    std::vector<float> layerZero(inputSize, 0);
+    CUDA_CHECK(cudaMemcpy(layerZero.data(), inputs, inputSize*sizeof(float), cudaMemcpyDeviceToHost));
+    for(int i = 0; i < layerZero.size(); i++){
+        std::cout<<layerZero[i]<<"\n";
+    }
     float* prev = layers[0].getNextLayer(inputs);
+    std::cout<<"Layer 1 nodes: \n";
+    layers[0].printActivation();
     float* curr = nullptr;
     for(int i = 1; i < layers.size(); i++){
-        std::cout<<"Loop "<<i<<"starting...\n";
         curr = layers[i].getNextLayer(prev);
+        std::cout<<"Layer "<<i + 1<<" nodes: \n";
+        layers[i].printActivation();
         prev = curr;
     }
     predictions = prev;

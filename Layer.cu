@@ -16,11 +16,17 @@ Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples, bool lastLa
     n_out = nodesNextLayer;
     samples = numSamples;
     this->lastLayer = lastLayer;
+    //allocate memory for all of our device arrays
     CUDA_CHECK(cudaMalloc((void **)&weights, n_in * n_out *sizeof(float)));
     CUDA_CHECK(cudaMalloc((void **)&biases, n_out * sizeof(float)));
+    CUDA_CHECK(cudaMalloc((void**)&a, n_out*samples*sizeof(float)));
+    CUDA_CHECK(cudaMalloc((void**)&z, n_out*samples*sizeof(float)));
     
-    //biases can be initialized to 0
+    //biases can be initialized to 0, same with a and z
     CUDA_CHECK(cudaMemset((void *)biases, 0.0, n_out * sizeof(float)));
+
+    CUDA_CHECK(cudaMemset((void *)a, 0.0, n_out * samples * sizeof(float)));
+    CUDA_CHECK(cudaMemset((void *)z, 0.0, n_out * samples * sizeof(float)));
 
     //weights cannot, use He normal initialization because we are using ReLU for now as the activation function
     CUDA_CHECK(cudaMemset((void *)weights, 0, n_in * n_out * sizeof(float)));
@@ -39,6 +45,8 @@ Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples, bool lastLa
 Layer::Layer(Layer&& other) noexcept {
     weights = other.weights;
     biases = other.biases;
+    z = other.z;
+    a = other.a;
 
     n_in = other.n_in;
     n_out = other.n_out;
@@ -49,29 +57,32 @@ Layer::Layer(Layer&& other) noexcept {
 
     other.weights = nullptr;
     other.biases = nullptr;
+    other.z = nullptr;
+    other.a = nullptr;
 }
 
 //getNextLayer will use the weights, biases, and activation to get us the next layer and 
 //return the values for this layer
-
+//note that prevLayer should be the attribute "a" for the previous layer
 
 float* Layer::getNextLayer(float* prevLayer){
-    float* nextLayer;
-    CUDA_CHECK(cudaMalloc((void **) &nextLayer, n_out*samples*sizeof(float)));
-    //multiply weights x prevLayer first
-    cudaMultiply(weights, prevLayer, nextLayer, n_out, samples, n_in);
+    //multiply weights x prevLayer first, store it in preactivation (z)
+    cudaMultiply(weights, prevLayer, z, n_out, samples, n_in);
     CUDA_CHECK(cudaDeviceSynchronize());
-    CUDA_CHECK(cudaFree(prevLayer));
-    
 
     //Add this matrix and biases
-    cudaAdd(nextLayer, biases, n_out, samples);
+    cudaAdd(z, biases, n_out, samples);
+
+    //copy z contents into a, and if there is an activation function, a will change accordingly
+    CUDA_CHECK(cudaMemcpy(a, z, n_out*samples*sizeof(float), cudaMemcpyDeviceToDevice));
+
     if(!lastLayer){
-        cudaReLUActivation(nextLayer, n_out * samples);
+        //apply the activation to a now
+        cudaReLUActivation(a, n_out * samples);
     }
     
 
-    return nextLayer;
+    return a;
 }
 
 //Helper function for debugging, weights is 
@@ -87,6 +98,22 @@ void Layer::printWeights(){
     }
 }
 
+void Layer::printActivation(){
+    std::vector<float> nodes(n_out*samples, 0);
+    CUDA_CHECK(cudaMemcpy(nodes.data(), a, n_out*samples*sizeof(float), cudaMemcpyDeviceToHost));
+    for(int i = 0; i < nodes.size(); i++){
+        std::cout<<nodes[i]<<"\n";
+    }
+}
+
+void Layer::printPreActivation(){
+    std::vector<float> nodes(n_out*samples, 0);
+    CUDA_CHECK(cudaMemcpy(nodes.data(), z, n_out*samples*sizeof(float), cudaMemcpyDeviceToHost));
+    for(int i = 0; i < nodes.size(); i++){
+        std::cout<<nodes[i]<<"\n";
+    }
+}
+
 void Layer::setBiases(std::vector<float> hardcodedBiases){
     CUDA_CHECK(cudaMemcpy((void *)biases, hardcodedBiases.data(), n_out*sizeof(float), cudaMemcpyHostToDevice));
 }
@@ -98,6 +125,8 @@ void Layer::setWeights(std::vector<float> hardcodedWeights){
 Layer::~Layer(){
     CUDA_CHECK(cudaFree(weights));
     CUDA_CHECK(cudaFree(biases));
+    CUDA_CHECK(cudaFree(a));
+    CUDA_CHECK(cudaFree(z));
 }
 
 
