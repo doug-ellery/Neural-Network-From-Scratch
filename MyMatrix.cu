@@ -10,7 +10,8 @@
 
 
 //multiply two matrices A and B, where A = M x K, B = K x N
-void cudaMultiply(float* A, float* B, float* d_C, int M, int N, int K){
+void cudaMultiply(float* A, float* B, float* d_C, int M, int N, int K, cublasOperation_t opA, cublasOperation_t opB){
+
     //output array d_C = M x N
     CUDA_CHECK(cudaMemset(d_C, 0, M*N*sizeof(float)));
     
@@ -20,6 +21,12 @@ void cudaMultiply(float* A, float* B, float* d_C, int M, int N, int K){
     CUDA_CHECK(cudaMalloc(&d_B, K*N*sizeof(__half)));
     floatToHalfCast(A, d_A, M*K);
     floatToHalfCast(B, d_B, K*N);
+
+    //get leading dimensions for gemm ex
+    int lda = (opB == CUBLAS_OP_N) ? N : K;
+    int ldb = (opA == CUBLAS_OP_N) ? K : M;
+
+    
 
     //CUBLAS handle initialize
     cublasHandle_t handle;
@@ -41,11 +48,11 @@ void cudaMultiply(float* A, float* B, float* d_C, int M, int N, int K){
     //also feed the dimensions backwards as well, as opposed to M,N,K
     CUBLAS_CHECK(cublasGemmEx(
         handle,
-        CUBLAS_OP_N, CUBLAS_OP_N,
+        opB, opA,
         N, M, K,
         (const void*) &alpha,
-        (const void*) d_B, CUDA_R_16F, N,    //feeding B first with leading dimension (cols)
-        (const void*) d_A, CUDA_R_16F, K,    //feeding A second with leading dimension (cols)
+        (const void*) d_B, CUDA_R_16F, lda,    //feeding B first with leading dimension (cols)
+        (const void*) d_A, CUDA_R_16F, ldb,    //feeding A second with leading dimension (cols)
         (const void*) &beta,
         d_C, CUDA_R_32F, N,
         CUBLAS_COMPUTE_32F_FAST_TF32,
@@ -56,6 +63,7 @@ void cudaMultiply(float* A, float* B, float* d_C, int M, int N, int K){
     //Get rid of the half arrays
     CUDA_CHECK(cudaFree(d_A));
     CUDA_CHECK(cudaFree(d_B));
+    CUBLAS_CHECK(cublasDestroy(handle));
 
 }
 
@@ -121,7 +129,7 @@ void cudaAdd(float* A, float* B, int M, int N){
 //Kernel to help initialize the weights for a layer, using He initialization
 __global__ void weightInitializeKernel(float* weights, int size, int n_in, unsigned long seed){
     int index, jump;
-    getIndexJump(index,jump);
+    getIndexJump(index, jump);
     if(index < size){
         for(int i = index; i < size; i += jump){
             //create RNG state
@@ -144,7 +152,6 @@ __global__ void weightInitializeKernel(float* weights, int size, int n_in, unsig
 static __global__ void reluActivationKernel(float* layer, int size){
     int index, jump;
     getIndexJump(index, jump);
-
     for(int i = index; i < size; i += jump){
         if(layer[i] < 0.0f){
             layer[i] = 0.0f;
@@ -186,10 +193,42 @@ __global__ void costKernel(float* predictions, float* correctOnes, float* cost, 
         //Key: use atomic addition because multiple threads may be trying to add 
         //to cost at the same time, so this avoids race conditions that can lead to wrong answers
         //atomicAdd(cost, (-1.0f)*correctOnes[index]*__logf(predictions[index])/(float)numSamples);
-        atomicAdd(cost, (1.0f)/numSamples*(predictions[index] - correctOnes[index])*(predictions[index] - correctOnes[index]));
+        //added a 2 on the bottom to make the derivative cleaner later on, so that the 2 on the 
+        // bottom cancels with the 2 that comes on top when we do power rule for the delta calculation
+        atomicAdd(cost, (1.0f)/(2.0f*numSamples)*(predictions[index] - correctOnes[index])*(predictions[index] - correctOnes[index]));
     }
 }
 
+//kernel to get my deltas for the ouput layer, because I am doing batching, this array is 
+// numNodes x numSamples, as opposed to just numNodes
+__global__ void startingDeltaKernel(float* predictions, float* correctOnes, float* startingDeltas, int size){
+    int index, jump;
+    getIndexJump(index, jump);
+    for(int i = index; i < size; i+= jump){
+        //delta = a_i - y_i for this layer, because of the derivative of MSE
+        startingDeltas[i] = predictions[i] - correctOnes[i];
+    }
+}
 
+//kernel to apply relu derivative to the matrix produced from calculating W^t * delta^l+1,
+//to give us our delta^1
+__global__ void reluPrimeKernel(float* z, float* deltaL, int n_in, int numSamples){
+    int index, jump;
+    getIndexJump(index, jump);
+    for(int i = index; i < n_in*numSamples; i+= jump){
+        //if z_i = negative, relu'(z_i) = 0
+        if(z[i] < 0){
+            deltaL[i] = 0;
+        }
+    }
+}
 
-
+//helper function to print matrices that are stored as 1D arrays but are of dimension M x N
+void printVec(std::vector<float> vec, int M, int N){
+    for(int r = 0; r < M; r++){
+        for(int c = 0; c < N; c++){
+            std::cout<<vec[r*N + c]<<" ";
+        }
+        std::cout<<"\n";
+    }
+}

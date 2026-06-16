@@ -29,23 +29,25 @@ NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize
     //get outputs onto GPU
     CUDA_CHECK(cudaMalloc(&correctOutputs, outputSize*numSamples*sizeof(float)));
     CUDA_CHECK(cudaMemcpy(correctOutputs, outputs.data(), outputSize*numSamples*sizeof(float), cudaMemcpyHostToDevice));
+    //get starting delta allocated
+    CUDA_CHECK(cudaMalloc(&startingDelta, outputSize*numSamples*sizeof(float)));
+    CUDA_CHECK(cudaMemset(startingDelta, 0, outputSize*numSamples*sizeof(float)));
 
 }
 
 
 std::vector<float> NeuralNet::forwardPass(){
     std::cout<<"Layer 0 nodes: \n";
-    std::vector<float> layerZero(inputSize, 0);
-    CUDA_CHECK(cudaMemcpy(layerZero.data(), inputs, inputSize*sizeof(float), cudaMemcpyDeviceToHost));
-    for(int i = 0; i < layerZero.size(); i++){
-        std::cout<<layerZero[i]<<"\n";
-    }
+    std::vector<float> layerZero(inputSize*numSamples, 0);
+    CUDA_CHECK(cudaMemcpy(layerZero.data(), inputs, inputSize*numSamples*sizeof(float), cudaMemcpyDeviceToHost));
+    printVec(layerZero, inputSize, numSamples);
     float* prev = layers[0].getNextLayer(inputs);
     std::cout<<"Layer 1 nodes: \n";
     layers[0].printActivation();
     float* curr = nullptr;
     for(int i = 1; i < layers.size(); i++){
         curr = layers[i].getNextLayer(prev);
+        CUDA_CHECK(cudaFree(prev));
         std::cout<<"Layer "<<i + 1<<" nodes: \n";
         layers[i].printActivation();
         prev = curr;
@@ -54,6 +56,15 @@ std::vector<float> NeuralNet::forwardPass(){
     std::vector<float> outVec(numSamples * outputSize);
     CUDA_CHECK(cudaMemcpy(outVec.data(), predictions, numSamples * outputSize * sizeof(float), cudaMemcpyDeviceToHost));
     return outVec;
+}
+
+void NeuralNet::getStartingDelta(){
+    int threadsPerBlock, numBlocks;
+    getThreadsBlocks(threadsPerBlock, numBlocks, numSamples*outputSize);
+
+    //call starting delta kernel
+    startingDeltaKernel<<<numBlocks, threadsPerBlock>>>(predictions, correctOutputs, startingDelta, numSamples*outputSize);
+
 }
 
 
@@ -76,5 +87,35 @@ void NeuralNet::getCost(){
     
 }
 
-NeuralNet::~NeuralNet() {}
+void NeuralNet::getAllDeltas(){
+    float* deltaLPlusOne = startingDelta;
+    float* temp;
+    for(int i = layers.size() - 1; i > 0; i--){
+        temp = layers[i].getDelta(deltaLPlusOne, layers[i - 1].getZ());
+        if(deltaLPlusOne != startingDelta){
+            CUDA_CHECK(cudaFree(deltaLPlusOne));
+        }
+        deltaLPlusOne = temp;
+    }
+}
+
+void NeuralNet::showAllDeltas(){
+    getStartingDelta();
+    std::vector<float> outputDelta(outputSize*numSamples);
+    CUDA_CHECK(cudaMemcpy(outputDelta.data(), startingDelta, outputSize*numSamples*sizeof(float), cudaMemcpyDeviceToHost));
+    printVec(outputDelta, outputSize, numSamples);
+    getAllDeltas();
+    for(int i = layers.size() - 1; i > 0; i--){
+        std::cout<<"\n\n";
+        layers[i].printDelta();
+    }
+}
+
+NeuralNet::~NeuralNet(){
+    //free all the GPU memory we allocated
+    CUDA_CHECK(cudaFree(inputs));
+    CUDA_CHECK(cudaFree(predictions));
+    CUDA_CHECK(cudaFree(correctOutputs));
+    CUDA_CHECK(cudaFree(startingDelta));
+}
 

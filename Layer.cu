@@ -21,12 +21,15 @@ Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples, bool lastLa
     CUDA_CHECK(cudaMalloc((void **)&biases, n_out * sizeof(float)));
     CUDA_CHECK(cudaMalloc((void**)&a, n_out*samples*sizeof(float)));
     CUDA_CHECK(cudaMalloc((void**)&z, n_out*samples*sizeof(float)));
+    CUDA_CHECK(cudaMalloc((void**)&delta, n_in*samples*sizeof(float)));
+
     
-    //biases can be initialized to 0, same with a and z
+    //biases can be initialized to 0, same with a, z, and delta
     CUDA_CHECK(cudaMemset((void *)biases, 0.0, n_out * sizeof(float)));
 
     CUDA_CHECK(cudaMemset((void *)a, 0.0, n_out * samples * sizeof(float)));
     CUDA_CHECK(cudaMemset((void *)z, 0.0, n_out * samples * sizeof(float)));
+    CUDA_CHECK(cudaMemset((void *)delta, 0.0, n_in * samples * sizeof(float)));
 
     //weights cannot, use He normal initialization because we are using ReLU for now as the activation function
     CUDA_CHECK(cudaMemset((void *)weights, 0, n_in * n_out * sizeof(float)));
@@ -47,10 +50,12 @@ Layer::Layer(Layer&& other) noexcept {
     biases = other.biases;
     z = other.z;
     a = other.a;
+    delta = other.delta;
 
     n_in = other.n_in;
     n_out = other.n_out;
     samples = other.samples;
+    lastLayer = other.lastLayer;
     other.n_in = 0;
     other.n_out = 0;
     other.samples = 0;
@@ -59,6 +64,7 @@ Layer::Layer(Layer&& other) noexcept {
     other.biases = nullptr;
     other.z = nullptr;
     other.a = nullptr;
+    other.delta = nullptr;
 }
 
 //getNextLayer will use the weights, biases, and activation to get us the next layer and 
@@ -80,12 +86,13 @@ float* Layer::getNextLayer(float* prevLayer){
         //apply the activation to a now
         cudaReLUActivation(a, n_out * samples);
     }
-    
-
-    return a;
+    float* out;
+    CUDA_CHECK(cudaMalloc((void**)&out, n_out*samples*sizeof(float)));
+    CUDA_CHECK(cudaMemcpy(out, a, n_out*samples*sizeof(float), cudaMemcpyDeviceToDevice));
+    return out;
 }
 
-//Helper function for debugging, weights is 
+//Helper function for debugging the weights
 void Layer::printWeights(){
     std::vector<float> printer(n_out*n_in, 0);
     std::cout<<"Weights: \n";
@@ -97,15 +104,13 @@ void Layer::printWeights(){
         std::cout<<"\n";
     }
 }
-
+//for debugging
 void Layer::printActivation(){
     std::vector<float> nodes(n_out*samples, 0);
     CUDA_CHECK(cudaMemcpy(nodes.data(), a, n_out*samples*sizeof(float), cudaMemcpyDeviceToHost));
-    for(int i = 0; i < nodes.size(); i++){
-        std::cout<<nodes[i]<<"\n";
-    }
+    printVec(nodes, n_out, samples);
 }
-
+//for debugging
 void Layer::printPreActivation(){
     std::vector<float> nodes(n_out*samples, 0);
     CUDA_CHECK(cudaMemcpy(nodes.data(), z, n_out*samples*sizeof(float), cudaMemcpyDeviceToHost));
@@ -122,11 +127,39 @@ void Layer::setWeights(std::vector<float> hardcodedWeights){
     CUDA_CHECK(cudaMemcpy((void *)weights, hardcodedWeights.data(), n_out*n_in*sizeof(float), cudaMemcpyHostToDevice));
 }
 
+//get the previous delta given the delta of the layer after this one
+float* Layer::getDelta(float* deltaLPlusOne, float* z_l){
+    //compute weights^T*delta^l+1 first, where M = n_in, K = n_out, N = samples
+    cudaMultiply(weights, deltaLPlusOne, delta, n_in, samples, n_out, CUBLAS_OP_T, CUBLAS_OP_N);
+    int threadsPerBlock, numBlocks;
+    getThreadsBlocks(threadsPerBlock, numBlocks, n_in*samples);
+
+
+    reluPrimeKernel<<<numBlocks, threadsPerBlock>>>(z_l, delta, n_in, samples);
+    float* out;
+    CUDA_CHECK(cudaMalloc((void**)&out, n_in*samples*sizeof(float)));
+    CUDA_CHECK(cudaMemcpy(out, delta, n_in*samples*sizeof(float), cudaMemcpyDeviceToDevice));
+    return out;
+}
+
+//getter for the preactivation, which is needed so the neural network can give z from one 
+//layer to another for the delta calculation
+float* Layer:: getZ(){
+    return z;
+}
+
+void Layer::printDelta(){
+    std::vector<float> printer(n_in*samples);
+    CUDA_CHECK(cudaMemcpy(printer.data(), delta, n_in*samples*sizeof(float), cudaMemcpyDeviceToHost));
+    printVec(printer, n_in, samples);
+}
+
 Layer::~Layer(){
     CUDA_CHECK(cudaFree(weights));
     CUDA_CHECK(cudaFree(biases));
     CUDA_CHECK(cudaFree(a));
     CUDA_CHECK(cudaFree(z));
+    CUDA_CHECK(cudaFree(delta));
 }
 
 
