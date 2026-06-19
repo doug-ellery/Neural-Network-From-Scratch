@@ -22,14 +22,18 @@ Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples, bool lastLa
     CUDA_CHECK(cudaMalloc((void**)&a, n_out*samples*sizeof(float)));
     CUDA_CHECK(cudaMalloc((void**)&z, n_out*samples*sizeof(float)));
     CUDA_CHECK(cudaMalloc((void**)&delta, n_in*samples*sizeof(float)));
+    CUDA_CHECK(cudaMalloc((void**)&weight_gradients, n_in*n_out*sizeof(float)));
+    CUDA_CHECK(cudaMalloc((void**)&bias_gradients, n_out*sizeof(float)));
 
     
-    //biases can be initialized to 0, same with a, z, and delta
+    //biases can be initialized to 0, same with a, z, delta, and gradients
     CUDA_CHECK(cudaMemset((void *)biases, 0.0, n_out * sizeof(float)));
 
     CUDA_CHECK(cudaMemset((void *)a, 0.0, n_out * samples * sizeof(float)));
     CUDA_CHECK(cudaMemset((void *)z, 0.0, n_out * samples * sizeof(float)));
     CUDA_CHECK(cudaMemset((void *)delta, 0.0, n_in * samples * sizeof(float)));
+    CUDA_CHECK(cudaMemset((void *)weight_gradients, 0.0, n_in*n_out*sizeof(float)));
+    CUDA_CHECK(cudaMemset((void *)bias_gradients, 0.0, n_out*sizeof(float)));
 
     //weights cannot, use He normal initialization because we are using ReLU for now as the activation function
     CUDA_CHECK(cudaMemset((void *)weights, 0, n_in * n_out * sizeof(float)));
@@ -152,6 +156,32 @@ void Layer::printDelta(){
     std::vector<float> printer(n_in*samples);
     CUDA_CHECK(cudaMemcpy(printer.data(), delta, n_in*samples*sizeof(float), cudaMemcpyDeviceToHost));
     printVec(printer, n_in, samples);
+}
+
+//gradient functions, important note: I needed to get passed delta_l because technically 
+//the delta stored in this layer is actually delta_l-1, when using standard layer conventions
+void Layer::getWeightGradients(float* delta_l, float* a_l_minus_one){
+    //follow formula: dC/dW_l = delta_l * (a_l-1)^T
+    //delta_l = n_out x samples, a_l-1 = n_in x samples
+    //thus, M = n_out, K = samples, M = n_in
+    cudaMultiply(delta_l, a_l_minus_one, weight_gradients, n_out, n_in, samples, CUBLAS_OP_N, CUBLAS_OP_T);
+    //average out by multiplying by 1/samples
+    int threadsPerBlock, numBlocks;
+    getThreadsBlocks(threadsPerBlock, numBlocks, n_out*n_in);
+    scalarMultiplyKernel<<<numBlocks, threadsPerBlock>>>(weight_gradients, 1.0f/samples, n_out*n_in);
+}
+
+void Layer::getBiasGradients(float* delta_l){
+    int threadsPerBlock, numBlocks;
+    getThreadsBlocks(threadsPerBlock, numBlocks, n_out*samples);
+    //column sum for each delta from each sample
+    columnSumKernel<<<numBlocks, threadsPerBlock>>>(delta_l, bias_gradients, n_out, samples);
+    //back to back kernels that are changing bias_gradients, so we should sync up before 
+    //moving to the second kernel
+    cudaDeviceSynchronize();
+    //average out
+    getThreadsBlocks(threadsPerBlock, numBlocks, n_out);
+    scalarMultiplyKernel<<<numBlocks, threadsPerBlock>>>(bias_gradients, 1.0f/samples, n_out);
 }
 
 Layer::~Layer(){

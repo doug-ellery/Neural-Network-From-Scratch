@@ -43,5 +43,7 @@ __global__ void weightedSumKernel(float* deltaLPlusOne, float* weights, int n_ou
 __global__ void deltaKernel(float* delta, float* deltaLPlusOne, float* z, float* weights, int n_out, int n_in, int numSamples);
 __global__ void reluPrimeKernel(float* z, float* deltaL, int n_in, int numSamples);
 void printVec(std::vector<float> vec, int M, int N);
+__global__ void columnSumKernel(float * input, float * output, int rows, int cols);
+__global__ void scalarMultiplyKernel(float * mat, float scalar, int size);
 
 #endif

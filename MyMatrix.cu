@@ -183,16 +183,14 @@ void floatToHalfCast(float* in, __half* out, int size){
     floatToHalfKernel<<<numBlocks, threadsPerBlock>>>(in, out, size);
 }
 
-/*Kernel for calculating the cost function, using log loss, where I sum 
-up actual*log(predicted) for all data points, and then multiply by -1/number of samples
-*/
+//Kernel for calculating the cost function, using MSE
+
 __global__ void costKernel(float* predictions, float* correctOnes, float* cost, int numSamples, int outputSize){
     int index, jump;
     getIndexJump(index, jump);
     for(int i = index; i < numSamples*outputSize; i += jump){
         //Key: use atomic addition because multiple threads may be trying to add 
         //to cost at the same time, so this avoids race conditions that can lead to wrong answers
-        //atomicAdd(cost, (-1.0f)*correctOnes[index]*__logf(predictions[index])/(float)numSamples);
         //added a 2 on the bottom to make the derivative cleaner later on, so that the 2 on the 
         // bottom cancels with the 2 that comes on top when we do power rule for the delta calculation
         atomicAdd(cost, (1.0f)/(2.0f*numSamples)*(predictions[index] - correctOnes[index])*(predictions[index] - correctOnes[index]));
@@ -230,5 +228,25 @@ void printVec(std::vector<float> vec, int M, int N){
             std::cout<<vec[r*N + c]<<" ";
         }
         std::cout<<"\n";
+    }
+}
+//input = rows x cols, output = rows x 1
+//column sum sums up all items in the same ROW, visiting each column.
+//Assuming output was zero intiialized 
+__global__ void columnSumKernel(float * input, float * output, int rows, int cols){
+    int index, jump;
+    getIndexJump(index, jump);
+    for(int i = index; i < rows*cols; i += jump){
+        int row = i / cols;
+        atomicAdd(&output[row], input[i]);
+    }
+}
+
+//for multiplying a matrix by a scalar value, which mutliplies each individual item
+__global__ void scalarMultiplyKernel(float * mat, float scalar, int size){
+    int index, jump;
+    getIndexJump(index, jump);
+    for(int i = index; i < size; i += jump){
+        mat[i] *= scalar;
     }
 }

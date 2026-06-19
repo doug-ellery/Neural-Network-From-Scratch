@@ -8,6 +8,8 @@ class Layer{
     int n_in, n_out, samples;
     //activation and preactivation arrays that we'll get from computing the next layer
     float* a, *z;
+    //gradients for the weights and biases
+    float* weight_gradients, *bias_gradients;
     //delta array
     float* delta;
     //For my forward pass logic, so I know whether or not to apply activation
@@ -16,6 +18,8 @@ class Layer{
         Layer(int, int, int, bool);
         Layer(Layer&& other) noexcept;
         float* getNextLayer(float*);
+        void getWeightGradients(float* delta_l, float* a_l_minus_one);
+        void getBiasGradients(float* delta_l);
         void setWeights(std::vector<float> hardcodedWeights);
         void setBiases(std::vector<float> hardcodedBiases);
         void printActivation();
@@ -24,7 +28,7 @@ class Layer{
         void printNodes();
         void printDelta();
         float* getDelta(float* deltaLPlusOne, float* z_l);
-        float* Layer:: getZ();
+        float* getZ();
         ~Layer();
 
         //Don't allow layers to be copied, this causes wierd stuff to happen because we 
