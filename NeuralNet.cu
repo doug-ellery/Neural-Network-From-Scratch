@@ -100,14 +100,28 @@ void NeuralNet::getAllDeltas(){
 }
 
 void NeuralNet::showAllDeltas(){
-    getStartingDelta();
     std::vector<float> outputDelta(outputSize*numSamples);
     CUDA_CHECK(cudaMemcpy(outputDelta.data(), startingDelta, outputSize*numSamples*sizeof(float), cudaMemcpyDeviceToHost));
     printVec(outputDelta, outputSize, numSamples);
-    getAllDeltas();
     for(int i = layers.size() - 1; i > 0; i--){
         std::cout<<"\n\n";
         layers[i].printDelta();
+    }
+}
+
+void NeuralNet::backProp(){
+    getCost();
+    getStartingDelta();
+    getAllDeltas();
+    float * delta_l = startingDelta;
+    float * a_l_minus_one = layers.size() == 1 ? inputs : layers[layers.size() - 2].getActivation();
+    for(int i = layers.size() - 1; i >= 0; i--){
+        layers[i].getWeightGradients(delta_l, a_l_minus_one);
+        layers[i].getBiasGradients(delta_l);
+        delta_l = layers[i].returnDelta();
+        if(i != 0){
+            a_l_minus_one = i == 1 ? inputs : layers[i - 2].getActivation();
+        }
     }
 }
 

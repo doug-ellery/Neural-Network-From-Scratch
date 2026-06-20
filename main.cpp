@@ -36,6 +36,10 @@ int main() {
         outputs
     );
 
+    //--------------------------------------------------
+    // Set known weights
+    //--------------------------------------------------
+
     testNet.layers[0].setWeights({
         2.0f, -1.0f,
         1.0f,  3.0f
@@ -45,8 +49,21 @@ int main() {
         4.0f, -2.0f
     });
 
-    testNet.layers[0].setBiases({1.0f, -2.0f});
-    testNet.layers[1].setBiases({5.0f});
+    //--------------------------------------------------
+    // Set known biases
+    //--------------------------------------------------
+
+    testNet.layers[0].setBiases({
+        1.0f, -2.0f
+    });
+
+    testNet.layers[1].setBiases({
+        5.0f
+    });
+
+    //--------------------------------------------------
+    // Forward pass
+    //--------------------------------------------------
 
     std::vector<float> predictedOutputs = testNet.forwardPass();
 
@@ -58,12 +75,38 @@ int main() {
         std::cout << "\n";
     }
 
-    std::cout << "\nExpected:\n";
-    std::cout << "13 29 0\n";
+    //--------------------------------------------------
+    // Backprop
+    //--------------------------------------------------
 
-    testNet.getCost();
+    testNet.backProp();
 
+    //--------------------------------------------------
+    // Deltas
+    //--------------------------------------------------
+
+    std::cout << "\n===== DELTAS =====\n";
     testNet.showAllDeltas();
+
+    //--------------------------------------------------
+    // Layer 0 gradients
+    //--------------------------------------------------
+
+    std::cout << "\n===== LAYER 0 WEIGHT GRADIENTS =====\n";
+    testNet.layers[0].printWeightGradients();
+
+    std::cout << "\n===== LAYER 0 BIAS GRADIENTS =====\n";
+    testNet.layers[0].printBiasGradients();
+
+    //--------------------------------------------------
+    // Layer 1 gradients
+    //--------------------------------------------------
+
+    std::cout << "\n===== LAYER 1 WEIGHT GRADIENTS =====\n";
+    testNet.layers[1].printWeightGradients();
+
+    std::cout << "\n===== LAYER 1 BIAS GRADIENTS =====\n";
+    testNet.layers[1].printBiasGradients();
 
     return 0;
 }

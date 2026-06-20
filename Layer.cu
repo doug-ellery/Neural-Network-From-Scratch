@@ -55,6 +55,8 @@ Layer::Layer(Layer&& other) noexcept {
     z = other.z;
     a = other.a;
     delta = other.delta;
+    weight_gradients = other.weight_gradients;
+    bias_gradients = other.bias_gradients;
 
     n_in = other.n_in;
     n_out = other.n_out;
@@ -69,6 +71,8 @@ Layer::Layer(Layer&& other) noexcept {
     other.z = nullptr;
     other.a = nullptr;
     other.delta = nullptr;
+    other.weight_gradients = nullptr;
+    other.bias_gradients = nullptr;
 }
 
 //getNextLayer will use the weights, biases, and activation to get us the next layer and 
@@ -192,8 +196,16 @@ void Layer::printWeightGradients(){
 
 void Layer::printBiasGradients(){
     std::vector<float> printer(n_out);
-    CUDA_CHECK(cudaMemcpy(printer.data(), bias_gradients_gradients, n_out*sizeof(float), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(printer.data(), bias_gradients, n_out*sizeof(float), cudaMemcpyDeviceToHost));
     printVec(printer, n_out, 1);
+}
+
+float * Layer::getActivation(){
+    return a;
+}
+
+float * Layer::returnDelta(){
+    return delta;
 }
 
 Layer::~Layer(){

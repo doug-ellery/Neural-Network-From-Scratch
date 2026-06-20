@@ -17,6 +17,7 @@ class NeuralNet{
         void getCost();
         void getAllDeltas();
         void showAllDeltas();
+        void backProp();
         ~NeuralNet();
 
         //Delete copying operators for this class

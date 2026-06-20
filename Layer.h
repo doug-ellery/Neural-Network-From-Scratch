@@ -29,7 +29,9 @@ class Layer{
         void printPreActivation();
         void printNodes();
         void printDelta();
+        float * getActivation();
         float* getDelta(float* deltaLPlusOne, float* z_l);
+        float * returnDelta();
         float* getZ();
         ~Layer();
 
