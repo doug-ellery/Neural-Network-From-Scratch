@@ -184,12 +184,26 @@ void Layer::getBiasGradients(float* delta_l){
     scalarMultiplyKernel<<<numBlocks, threadsPerBlock>>>(bias_gradients, 1.0f/samples, n_out);
 }
 
+void Layer::printWeightGradients(){
+    std::vector<float> printer(n_out*n_in);
+    CUDA_CHECK(cudaMemcpy(printer.data(), weight_gradients, n_out*n_in*sizeof(float), cudaMemcpyDeviceToHost));
+    printVec(printer, n_out, n_in);
+}
+
+void Layer::printBiasGradients(){
+    std::vector<float> printer(n_out);
+    CUDA_CHECK(cudaMemcpy(printer.data(), bias_gradients_gradients, n_out*sizeof(float), cudaMemcpyDeviceToHost));
+    printVec(printer, n_out, 1);
+}
+
 Layer::~Layer(){
     CUDA_CHECK(cudaFree(weights));
     CUDA_CHECK(cudaFree(biases));
     CUDA_CHECK(cudaFree(a));
     CUDA_CHECK(cudaFree(z));
     CUDA_CHECK(cudaFree(delta));
+    CUDA_CHECK(cudaFree(weight_gradients));
+    CUDA_CHECK(cudaFree(bias_gradients));
 }
 
 

@@ -24,6 +24,8 @@ class Layer{
         void setBiases(std::vector<float> hardcodedBiases);
         void printActivation();
         void printWeights();
+        void printWeightGradients();
+        void printBiasGradients();
         void printPreActivation();
         void printNodes();
         void printDelta();
