@@ -4,24 +4,26 @@
 #include <vector>
 
 int main() {
-    int numSamples = 3;
-    int inputSize = 2;
+    int numSamples = 4;
+    int inputSize = 3;
     int numHiddenLayers = 1;
-    int nodesPerLayer = 2;
-    int outputSize = 1;
+    int nodesPerLayer = 3;
+    int outputSize = 2;
 
     std::vector<float> inputs;
     std::vector<float> outputs;
 
     float rawInputs[] = {
-        2.0f,  1.0f, -1.0f,
-        1.0f, -2.0f,  3.0f
+         1.0f,  2.0f, -1.0f,  0.0f,
+         3.0f, -2.0f,  1.0f,  4.0f,
+        -1.0f,  0.0f,  2.0f, -3.0f
     };
 
     inputs.assign(rawInputs, rawInputs + inputSize * numSamples);
 
     float rawOutputs[] = {
-        10.0f, -5.0f, 20.0f
+         5.0f, -3.0f,  2.0f,  8.0f,
+        -1.0f,  4.0f,  7.0f, -2.0f
     };
 
     outputs.assign(rawOutputs, rawOutputs + outputSize * numSamples);
@@ -37,35 +39,49 @@ int main() {
     );
 
     //--------------------------------------------------
-    // Set known weights
+    // Hidden layer weights (3 x 3)
     //--------------------------------------------------
 
     testNet.layers[0].setWeights({
-        2.0f, -1.0f,
-        1.0f,  3.0f
-    });
-
-    testNet.layers[1].setWeights({
-        4.0f, -2.0f
+         2.0f, -1.0f,  3.0f,
+        -2.0f,  4.0f,  1.0f,
+         1.0f, -3.0f,  2.0f
     });
 
     //--------------------------------------------------
-    // Set known biases
+    // Output layer weights (2 x 3)
+    //--------------------------------------------------
+
+    testNet.layers[1].setWeights({
+         3.0f, -2.0f,  1.0f,
+        -1.0f,  2.0f,  4.0f
+    });
+
+    //--------------------------------------------------
+    // Hidden layer biases
     //--------------------------------------------------
 
     testNet.layers[0].setBiases({
-        1.0f, -2.0f
+         1.0f,
+        -2.0f,
+         0.5f
     });
+
+    //--------------------------------------------------
+    // Output layer biases
+    //--------------------------------------------------
 
     testNet.layers[1].setBiases({
-        5.0f
+         2.0f,
+        -1.0f
     });
 
+    testNet.train();
     //--------------------------------------------------
     // Forward pass
     //--------------------------------------------------
 
-    std::vector<float> predictedOutputs = testNet.forwardPass();
+    /*std::vector<float> predictedOutputs = testNet.forwardPass();
 
     std::cout << "Predicted outputs:\n";
     for (int r = 0; r < outputSize; r++) {
@@ -107,6 +123,7 @@ int main() {
 
     std::cout << "\n===== LAYER 1 BIAS GRADIENTS =====\n";
     testNet.layers[1].printBiasGradients();
+    */
 
     return 0;
 }

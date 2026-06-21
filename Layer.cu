@@ -208,6 +208,22 @@ float * Layer::returnDelta(){
     return delta;
 }
 
+//updating weights after backprop
+void Layer::updateWeights(float learning_rate){
+    int threadsPerBlock, numBlocks;
+    getThreadsBlocks(threadsPerBlock, numBlocks, n_out*n_in);
+    //call the update kernel with the weight array and weight gradient
+    updateParameterKernel<<<numBlocks, threadsPerBlock>>>(weights, weight_gradients, learning_rate, n_out*n_in);
+}
+
+//updating biases after backprop
+void Layer::updateBiases(float learning_rate){
+    int threadsPerBlock, numBlocks;
+    getThreadsBlocks(threadsPerBlock, numBlocks, n_out);
+    //call the update kernel with the bias array and bias gradient
+    updateParameterKernel<<<numBlocks, threadsPerBlock>>>(biases, bias_gradients, learning_rate, n_out);
+}
+
 Layer::~Layer(){
     CUDA_CHECK(cudaFree(weights));
     CUDA_CHECK(cudaFree(biases));

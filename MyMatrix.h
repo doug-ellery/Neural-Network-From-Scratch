@@ -45,5 +45,7 @@ __global__ void reluPrimeKernel(float* z, float* deltaL, int n_in, int numSample
 void printVec(std::vector<float> vec, int M, int N);
 __global__ void columnSumKernel(float * input, float * output, int rows, int cols);
 __global__ void scalarMultiplyKernel(float * mat, float scalar, int size);
+__global__ void updateParameterKernel(float * params, float * gradient, float learning_rate, int size);
+
 
 #endif

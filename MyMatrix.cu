@@ -250,3 +250,13 @@ __global__ void scalarMultiplyKernel(float * mat, float scalar, int size){
         mat[i] *= scalar;
     }
 }
+
+//for updating either the weights or biases after running back prop
+__global__ void updateParameterKernel(float * params, float * gradient, float learning_rate, int size){
+    int index, jump;
+    getIndexJump(index, jump);
+    for(int i = index; i < size; i += jump){
+        //follow formula: W = W - lr*dW or B = B - lr*dB
+        params[i] -= learning_rate * gradient[i];
+    }
+}

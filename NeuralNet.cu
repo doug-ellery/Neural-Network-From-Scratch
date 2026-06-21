@@ -9,6 +9,7 @@ NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize
     this->numSamples = numSamples;
     this->outputSize = outputSize;
     this->inputSize = inputSize;
+    learning_rate = 0.01;
     //create input layer weights
     layers.reserve(numHiddenLayers + 1);
     layers.push_back(Layer(inputSize, nodesPerHiddenLayer, numSamples, false));
@@ -37,19 +38,19 @@ NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize
 
 
 std::vector<float> NeuralNet::forwardPass(){
-    std::cout<<"Layer 0 nodes: \n";
-    std::vector<float> layerZero(inputSize*numSamples, 0);
-    CUDA_CHECK(cudaMemcpy(layerZero.data(), inputs, inputSize*numSamples*sizeof(float), cudaMemcpyDeviceToHost));
-    printVec(layerZero, inputSize, numSamples);
+    //std::cout<<"Layer 0 nodes: \n";
+    //std::vector<float> layerZero(inputSize*numSamples, 0);
+    //CUDA_CHECK(cudaMemcpy(layerZero.data(), inputs, inputSize*numSamples*sizeof(float), cudaMemcpyDeviceToHost));
+    //printVec(layerZero, inputSize, numSamples);
     float* prev = layers[0].getNextLayer(inputs);
-    std::cout<<"Layer 1 nodes: \n";
-    layers[0].printActivation();
+    //std::cout<<"Layer 1 nodes: \n";
+    //layers[0].printActivation();
     float* curr = nullptr;
     for(int i = 1; i < layers.size(); i++){
         curr = layers[i].getNextLayer(prev);
         CUDA_CHECK(cudaFree(prev));
-        std::cout<<"Layer "<<i + 1<<" nodes: \n";
-        layers[i].printActivation();
+        //std::cout<<"Layer "<<i + 1<<" nodes: \n";
+        //layers[i].printActivation();
         prev = curr;
     }
     predictions = prev;
@@ -116,12 +117,23 @@ void NeuralNet::backProp(){
     float * delta_l = startingDelta;
     float * a_l_minus_one = layers.size() == 1 ? inputs : layers[layers.size() - 2].getActivation();
     for(int i = layers.size() - 1; i >= 0; i--){
+        //calculate gradients
         layers[i].getWeightGradients(delta_l, a_l_minus_one);
         layers[i].getBiasGradients(delta_l);
+        //update based on those gradients
+        layers[i].updateWeights(learning_rate);
+        layers[i].updateBiases(learning_rate);
         delta_l = layers[i].returnDelta();
         if(i != 0){
             a_l_minus_one = i == 1 ? inputs : layers[i - 2].getActivation();
         }
+    }
+}
+
+void NeuralNet::train(){
+    for(int i = 0; i < 50; i++){
+        forwardPass();
+        backProp();
     }
 }
 

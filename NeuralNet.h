@@ -7,7 +7,7 @@
 
 class NeuralNet{
     
-    float* inputs, *predictions, *correctOutputs, *startingDelta;
+    float* inputs, *predictions, *correctOutputs, *startingDelta, learning_rate;
     int numSamples, outputSize, inputSize;
     public:
         std::vector<Layer> layers;
@@ -18,6 +18,7 @@ class NeuralNet{
         void getAllDeltas();
         void showAllDeltas();
         void backProp();
+        void train();
         ~NeuralNet();
 
         //Delete copying operators for this class

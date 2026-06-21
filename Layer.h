@@ -14,6 +14,7 @@ class Layer{
     float* delta;
     //For my forward pass logic, so I know whether or not to apply activation
     bool lastLayer;
+
     public:
         Layer(int, int, int, bool);
         Layer(Layer&& other) noexcept;
@@ -33,6 +34,8 @@ class Layer{
         float* getDelta(float* deltaLPlusOne, float* z_l);
         float * returnDelta();
         float* getZ();
+        void updateWeights(float learning_rate);
+        void updateBiases(float learning_rate);
         ~Layer();
 
         //Don't allow layers to be copied, this causes wierd stuff to happen because we 
