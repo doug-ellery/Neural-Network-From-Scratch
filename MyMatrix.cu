@@ -127,7 +127,7 @@ void cudaAdd(float* A, float* B, int M, int N){
 }
 
 //Kernel to help initialize the weights for a layer, using He initialization
-__global__ void weightInitializeKernel(float* weights, int size, int n_in, unsigned long seed){
+__global__ void weightHeInitializeKernel(float* weights, int size, int n_in, unsigned long seed){
     int index, jump;
     getIndexJump(index, jump);
     if(index < size){
@@ -148,8 +148,30 @@ __global__ void weightInitializeKernel(float* weights, int size, int n_in, unsig
     }
 }
 
+//very similar to the above kernel, but use sqrt(1.0/n_in), not 2.0
+__global__ void weightXavierInitializeKernel(float* weights, int size, int n_in, unsigned long seed){
+    int index, jump;
+    getIndexJump(index, jump);
+    if(index < size){
+        for(int i = index; i < size; i += jump){
+            //create RNG state
+            curandState state;
+            curand_init(seed, i, 0, &state);
+
+            //Xavier Normal Scaling, which works by using the property that for a standard
+            //gaussian RV, X = N(0,1), if we multiply by a we get a*X = N(0,a^2). For He normal,
+            //we want the random variable: N(0,1.0/n_in), so we can multiply the standard gaussian 
+            //by sqrt(1.0/n_in) to get this. 
+            float sigma = sqrtf(1.0f / n_in);
+            float rand_num = curand_normal(&state);
+            weights[i] = rand_num * sigma;
+
+        }
+    }
+}
+
 //ReLU = Rectified Linear Unit => f(x) = max(0, x)
-static __global__ void reluActivationKernel(float* layer, int size){
+__global__ void reluActivationKernel(float* layer, int size){
     int index, jump;
     getIndexJump(index, jump);
     for(int i = index; i < size; i += jump){
@@ -258,5 +280,28 @@ __global__ void updateParameterKernel(float * params, float * gradient, float le
     for(int i = index; i < size; i += jump){
         //follow formula: W = W - lr*dW or B = B - lr*dB
         params[i] -= learning_rate * gradient[i];
+    }
+}
+
+//adding a new activation function, tanh, which is better at learning curved functions with smaller networks
+__global__ void tanhActivationKernel(float* layer, int size){
+    int index, jump;
+    getIndexJump(index, jump);
+    for(int i = index; i < size; i += jump){
+        layer[i] = tanhf(layer[i]);
+    }
+}
+
+void cudaTanhActivation(float* A, int size){
+    int threadsPerBlock, numBlocks;
+    getThreadsBlocks(threadsPerBlock, numBlocks, size);
+    tanhActivationKernel<<<numBlocks, threadsPerBlock>>>(A, size);
+}
+
+__global__ void tanhPrimeKernel(float * a, float* delta_l, int n_in, int samples){
+    int index, jump;
+    getIndexJump(index, jump);
+    for(int i = index; i < n_in*samples; i += jump){
+        delta_l[i] *= 1 - a[i]*a[i];
     }
 }

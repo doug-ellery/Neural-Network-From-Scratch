@@ -1,4 +1,5 @@
 #include <vector>
+#include <string>
 
 #ifndef LAYER_H
 #define LAYER_H
@@ -7,7 +8,7 @@ class Layer{
     float* weights, *biases;
     int n_in, n_out, samples;
     //activation and preactivation arrays that we'll get from computing the next layer
-    float* a, *z;
+    float* a, *z, *prediction_a, *prediction_z;
     //gradients for the weights and biases
     float* weight_gradients, *bias_gradients;
     //delta array
@@ -15,16 +16,20 @@ class Layer{
     //For my forward pass logic, so I know whether or not to apply activation
     bool lastLayer;
 
+    std::string activation_func;
+
     public:
-        Layer(int, int, int, bool);
+        Layer(int, int, int, bool, std::string, int);
         Layer(Layer&& other) noexcept;
         float* getNextLayer(float*);
+        float* getNextLayerPrediction(float* prevLayer);
         void getWeightGradients(float* delta_l, float* a_l_minus_one);
         void getBiasGradients(float* delta_l);
         void setWeights(std::vector<float> hardcodedWeights);
         void setBiases(std::vector<float> hardcodedBiases);
         void printActivation();
         void printWeights();
+        void printBiases();
         void printWeightGradients();
         void printBiasGradients();
         void printPreActivation();

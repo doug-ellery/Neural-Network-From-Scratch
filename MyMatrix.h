@@ -34,7 +34,9 @@ void cudaMultiply(float* A, float* B, float* d_C, int M, int N, int K, cublasOpe
 __device__ void getIndexJump(int& index, int& jump);
 void getThreadsBlocks(int& threadsPerBlock, int& numBlocks, int size);
 void cudaAdd(float* A, float* B, int M, int N);
-__global__ void weightInitializeKernel(float* weights, int size, int n_in, unsigned long seed);
+__global__ void weightHeInitializeKernel(float* weights, int size, int n_in, unsigned long seed);
+__global__ void weightXavierInitializeKernel(float* weights, int size, int n_in, unsigned long seed);
+__global__ void reluActivationKernel(float* layer, int size);
 void cudaReLUActivation(float* A, int size);
 void floatToHalfCast(float* in, __half* out, int size);
 __global__ void costKernel(float* predictions, float* correctOnes, float* cost, int numSamples, int outputSize);
@@ -46,6 +48,9 @@ void printVec(std::vector<float> vec, int M, int N);
 __global__ void columnSumKernel(float * input, float * output, int rows, int cols);
 __global__ void scalarMultiplyKernel(float * mat, float scalar, int size);
 __global__ void updateParameterKernel(float * params, float * gradient, float learning_rate, int size);
+__global__ void tanhActivationKernel(float* layer, int size);
+void cudaTanhActivation(float* A, int size);
+__global__ void tanhPrimeKernel(float * a, float* delta_l, int n_in, int samples);
 
 
 #endif

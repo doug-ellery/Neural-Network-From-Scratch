@@ -3,24 +3,32 @@
 #include "MyMatrix.h"
 #include <cuda_runtime.h>
 #include <iostream>
+#include <climits>
+#include <string>
 
 
-NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>& data, std::vector<float>& outputs){
+NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>& data, std::vector<float>& outputs, std::string activation_func){
     this->numSamples = numSamples;
     this->outputSize = outputSize;
     this->inputSize = inputSize;
-    learning_rate = 0.01;
+    if(activation_func != "RELU" && activation_func != "TANH"){
+        std::cerr<<"Bad activation function param\n";
+        exit(1);
+    }
+    this->activation_func = activation_func;
+    learning_rate = 0.03f;
+    curr_cost = INT_MAX;
     //create input layer weights
     layers.reserve(numHiddenLayers + 1);
-    layers.push_back(Layer(inputSize, nodesPerHiddenLayer, numSamples, false));
+    layers.push_back(Layer(inputSize, nodesPerHiddenLayer, numSamples, false, activation_func, 0));
     int i = 0;
     //create hidden layer weights
     while(i < numHiddenLayers - 1){
-        layers.push_back(Layer(nodesPerHiddenLayer, nodesPerHiddenLayer, numSamples, false));
+        layers.push_back(Layer(nodesPerHiddenLayer, nodesPerHiddenLayer, numSamples, false, activation_func, i + 1));
         i++;
     }
     //create weights that take us to output layer
-    layers.push_back(Layer(nodesPerHiddenLayer, outputSize, numSamples, true));
+    layers.push_back(Layer(nodesPerHiddenLayer, outputSize, numSamples, true, activation_func, i + 1));
     //get values of first layer onto GPU
     CUDA_CHECK(cudaMalloc(&inputs, inputSize * numSamples * sizeof(float)));
     CUDA_CHECK(cudaMemcpy(inputs, data.data(), inputSize * numSamples * sizeof(float), cudaMemcpyHostToDevice));
@@ -37,25 +45,34 @@ NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize
 }
 
 
-std::vector<float> NeuralNet::forwardPass(){
-    //std::cout<<"Layer 0 nodes: \n";
-    //std::vector<float> layerZero(inputSize*numSamples, 0);
-    //CUDA_CHECK(cudaMemcpy(layerZero.data(), inputs, inputSize*numSamples*sizeof(float), cudaMemcpyDeviceToHost));
-    //printVec(layerZero, inputSize, numSamples);
-    float* prev = layers[0].getNextLayer(inputs);
-    //std::cout<<"Layer 1 nodes: \n";
-    //layers[0].printActivation();
+std::vector<float> NeuralNet::forwardPass(std::vector<float> prediction_inputs){
+    //prediction_input = device version of prediction_inputs
+    float * prediction_input = nullptr;
+    if(prediction_inputs.size() != 0){
+        CUDA_CHECK(cudaMalloc(&prediction_input, prediction_inputs.size()*sizeof(float)));
+        CUDA_CHECK(cudaMemcpy(prediction_input, prediction_inputs.data(), prediction_inputs.size()*sizeof(float), cudaMemcpyHostToDevice));
+    }
+    //we either want to start a forward pass with the training data (inputs), or the input for a prediction
+    float* prev = prediction_input!= nullptr ? layers[0].getNextLayerPrediction(prediction_input) : layers[0].getNextLayer(inputs);
     float* curr = nullptr;
     for(int i = 1; i < layers.size(); i++){
-        curr = layers[i].getNextLayer(prev);
+        //curr = layers[i].getNextLayer(prev);
+        curr = prediction_input != nullptr ? layers[i].getNextLayerPrediction(prev) : layers[i].getNextLayer(prev);
         CUDA_CHECK(cudaFree(prev));
-        //std::cout<<"Layer "<<i + 1<<" nodes: \n";
-        //layers[i].printActivation();
         prev = curr;
     }
-    predictions = prev;
-    std::vector<float> outVec(numSamples * outputSize);
-    CUDA_CHECK(cudaMemcpy(outVec.data(), predictions, numSamples * outputSize * sizeof(float), cudaMemcpyDeviceToHost));
+    if(prediction_input == nullptr){
+        predictions = prev;
+    }
+    //training forward pass case
+    if(prediction_input == nullptr){
+        std::vector<float> outVec(numSamples * outputSize);
+        CUDA_CHECK(cudaMemcpy(outVec.data(), predictions, numSamples * outputSize * sizeof(float), cudaMemcpyDeviceToHost));
+        return outVec;
+    }
+    std::vector<float> outVec(outputSize);
+    CUDA_CHECK(cudaMemcpy(outVec.data(), prev, outputSize*sizeof(float), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaFree(prediction_input));
     return outVec;
 }
 
@@ -81,10 +98,9 @@ void NeuralNet::getCost(){
 
     //call cost kernel
     costKernel<<<numBlocks, threadsPerBlock>>>(predictions, correctOutputs, cost, numSamples, outputSize);
-    float result;
-    CUDA_CHECK(cudaMemcpy(&result, cost, sizeof(float), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(&curr_cost, cost, sizeof(float), cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaFree(cost));
-    std::cout<<"Cost: "<<result<<"\n\n";
+    std::cout<<"Cost: "<<curr_cost<<"\n";
     
 }
 
@@ -92,7 +108,7 @@ void NeuralNet::getAllDeltas(){
     float* deltaLPlusOne = startingDelta;
     float* temp;
     for(int i = layers.size() - 1; i > 0; i--){
-        temp = layers[i].getDelta(deltaLPlusOne, layers[i - 1].getZ());
+        temp = activation_func == "RELU" ? layers[i].getDelta(deltaLPlusOne, layers[i - 1].getZ()) : layers[i].getDelta(deltaLPlusOne, layers[i - 1].getActivation());
         if(deltaLPlusOne != startingDelta){
             CUDA_CHECK(cudaFree(deltaLPlusOne));
         }
@@ -131,10 +147,18 @@ void NeuralNet::backProp(){
 }
 
 void NeuralNet::train(){
-    for(int i = 0; i < 50; i++){
+    for(int epoch = 0; epoch < 5000; epoch++){
         forwardPass();
         backProp();
+        if(curr_cost < 1e-6){
+            break;
+        }
     }
+}
+
+//predict an output by running a forward pass
+std::vector<float> NeuralNet::predict(std::vector<float> prediction_inputs){
+    return forwardPass(prediction_inputs);
 }
 
 NeuralNet::~NeuralNet(){

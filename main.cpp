@@ -1,129 +1,86 @@
 #include <iostream>
-#include "MyMatrix.h"
-#include "NeuralNet.h"
 #include <vector>
+#include "NeuralNet.h"
+#include "MyMatrix.h"
 
 int main() {
-    int numSamples = 4;
-    int inputSize = 3;
-    int numHiddenLayers = 1;
-    int nodesPerLayer = 3;
-    int outputSize = 2;
+    // -----------------------------
+    // Network config
+    // -----------------------------
+    int inputSize = 1;
+    int numHiddenLayers = 3;
+    int nodesPerLayer = 64;
+    int outputSize = 1;
 
+    // -----------------------------
+    // Normalization constants
+    // -----------------------------
+    const float xMin = -10.0f, xMax = 10.0f;
+    const float yMin =   0.0f, yMax = 100.0f;
+
+    auto normalizeX = [&](float x) {
+        return x / xMax; // maps [-10, 10] -> [-1, 1]
+    };
+    auto normalizeY = [&](float y) {
+        return (y - yMin) / (yMax - yMin); // maps [0, 100] -> [0, 1]
+    };
+    auto denormalizeY = [&](float y) {
+        return y * (yMax - yMin) + yMin;   // maps [0, 1] -> [0, 100]
+    };
+
+    // -----------------------------
+    // Training data: f(x) = x^2, normalized
+    // -----------------------------
     std::vector<float> inputs;
     std::vector<float> outputs;
 
-    float rawInputs[] = {
-         1.0f,  2.0f, -1.0f,  0.0f,
-         3.0f, -2.0f,  1.0f,  4.0f,
-        -1.0f,  0.0f,  2.0f, -3.0f
-    };
+    for (float x = -10.0f; x <= 10.0f; x += 0.5f) {
+        inputs.push_back(normalizeX(x));
+        outputs.push_back(normalizeY(x * x));
+    }
+    int numSamples = inputs.size();
 
-    inputs.assign(rawInputs, rawInputs + inputSize * numSamples);
-
-    float rawOutputs[] = {
-         5.0f, -3.0f,  2.0f,  8.0f,
-        -1.0f,  4.0f,  7.0f, -2.0f
-    };
-
-    outputs.assign(rawOutputs, rawOutputs + outputSize * numSamples);
-
-    NeuralNet testNet(
+    NeuralNet net(
         numHiddenLayers,
         nodesPerLayer,
         inputSize,
         outputSize,
         numSamples,
         inputs,
-        outputs
+        outputs,
+        "TANH"
     );
 
-    //--------------------------------------------------
-    // Hidden layer weights (3 x 3)
-    //--------------------------------------------------
+    // -----------------------------
+    // Train
+    // -----------------------------
+    net.train();
 
-    testNet.layers[0].setWeights({
-         2.0f, -1.0f,  3.0f,
-        -2.0f,  4.0f,  1.0f,
-         1.0f, -3.0f,  2.0f
-    });
+    // -----------------------------
+    // Test (denormalize predictions)
+    // -----------------------------
+    std::vector<float> testInputs = {
+        -12.0f, -10.0f, -7.0f, -3.5f,
+         -2.0f,  -1.0f,  0.0f,
+          1.0f,   2.0f,  3.5f,
+          7.0f,  10.0f, 12.0f
+    };
 
-    //--------------------------------------------------
-    // Output layer weights (2 x 3)
-    //--------------------------------------------------
+    std::cout << "\n--- Predictions (x^2) ---\n";
 
-    testNet.layers[1].setWeights({
-         3.0f, -2.0f,  1.0f,
-        -1.0f,  2.0f,  4.0f
-    });
+    for (float x : testInputs) {
+        float expected = x * x;
 
-    //--------------------------------------------------
-    // Hidden layer biases
-    //--------------------------------------------------
+        float xNorm = normalizeX(x);
+        std::vector<float> pred = net.predict({xNorm});
 
-    testNet.layers[0].setBiases({
-         1.0f,
-        -2.0f,
-         0.5f
-    });
+        float predicted = denormalizeY(pred[0]);
 
-    //--------------------------------------------------
-    // Output layer biases
-    //--------------------------------------------------
-
-    testNet.layers[1].setBiases({
-         2.0f,
-        -1.0f
-    });
-
-    testNet.train();
-    //--------------------------------------------------
-    // Forward pass
-    //--------------------------------------------------
-
-    /*std::vector<float> predictedOutputs = testNet.forwardPass();
-
-    std::cout << "Predicted outputs:\n";
-    for (int r = 0; r < outputSize; r++) {
-        for (int c = 0; c < numSamples; c++) {
-            std::cout << predictedOutputs[r * numSamples + c] << " ";
-        }
-        std::cout << "\n";
+        std::cout << "x = " << x
+                  << " | predicted = " << predicted
+                  << " | expected = " << expected
+                  << "\n";
     }
-
-    //--------------------------------------------------
-    // Backprop
-    //--------------------------------------------------
-
-    testNet.backProp();
-
-    //--------------------------------------------------
-    // Deltas
-    //--------------------------------------------------
-
-    std::cout << "\n===== DELTAS =====\n";
-    testNet.showAllDeltas();
-
-    //--------------------------------------------------
-    // Layer 0 gradients
-    //--------------------------------------------------
-
-    std::cout << "\n===== LAYER 0 WEIGHT GRADIENTS =====\n";
-    testNet.layers[0].printWeightGradients();
-
-    std::cout << "\n===== LAYER 0 BIAS GRADIENTS =====\n";
-    testNet.layers[0].printBiasGradients();
-
-    //--------------------------------------------------
-    // Layer 1 gradients
-    //--------------------------------------------------
-
-    std::cout << "\n===== LAYER 1 WEIGHT GRADIENTS =====\n";
-    testNet.layers[1].printWeightGradients();
-
-    std::cout << "\n===== LAYER 1 BIAS GRADIENTS =====\n";
-    testNet.layers[1].printBiasGradients();
-    */
 
     return 0;
 }
