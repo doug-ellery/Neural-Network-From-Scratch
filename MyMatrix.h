@@ -1,5 +1,4 @@
 #include <vector>
-#include <cuda_fp16.h>
 #include <cublas_v2.h>
 
 #ifndef MYMATRIX_H
@@ -30,7 +29,7 @@ do {                                                                          \
     } \
 }
 
-void cudaMultiply(float* A, float* B, float* d_C, int M, int N, int K, cublasOperation_t opA = CUBLAS_OP_N, cublasOperation_t opB = CUBLAS_OP_N);
+void cudaMultiply(float* A, float* B, float* d_C, int M, int N, int K, cublasHandle_t handle, cublasOperation_t opA = CUBLAS_OP_N, cublasOperation_t opB = CUBLAS_OP_N);
 __device__ void getIndexJump(int& index, int& jump);
 void getThreadsBlocks(int& threadsPerBlock, int& numBlocks, int size);
 void cudaAdd(float* A, float* B, int M, int N);
@@ -38,7 +37,6 @@ __global__ void weightHeInitializeKernel(float* weights, int size, int n_in, uns
 __global__ void weightXavierInitializeKernel(float* weights, int size, int n_in, unsigned long seed);
 __global__ void reluActivationKernel(float* layer, int size);
 void cudaReLUActivation(float* A, int size);
-void floatToHalfCast(float* in, __half* out, int size);
 __global__ void costKernel(float* predictions, float* correctOnes, float* cost, int numSamples, int outputSize);
 __global__ void startingDeltaKernel(float* predictions, float* correctOnes, float* startingDeltas, int size);
 __global__ void weightedSumKernel(float* deltaLPlusOne, float* weights, int n_out, int n_in, float* weightedSum, int batchNum, int j);

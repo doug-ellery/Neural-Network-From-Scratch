@@ -5,6 +5,7 @@
 #include <iostream>
 #include <climits>
 #include <string>
+#include <cublas_v2.h>
 
 
 NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>& data, std::vector<float>& outputs, std::string activation_func){
@@ -18,6 +19,11 @@ NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize
     this->activation_func = activation_func;
     learning_rate = 0.03f;
     curr_cost = INT_MAX;
+    CUBLAS_CHECK(cublasCreate(&handle));
+
+    //Enable tensor cores to be used
+    CUBLAS_CHECK(cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH));
+    Layer::handle = handle;
     //create input layer weights
     layers.reserve(numHiddenLayers + 1);
     layers.push_back(Layer(inputSize, nodesPerHiddenLayer, numSamples, false, activation_func, 0));
@@ -41,6 +47,8 @@ NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize
     //get starting delta allocated
     CUDA_CHECK(cudaMalloc(&startingDelta, outputSize*numSamples*sizeof(float)));
     CUDA_CHECK(cudaMemset(startingDelta, 0, outputSize*numSamples*sizeof(float)));
+
+    
 
 }
 
@@ -87,8 +95,8 @@ void NeuralNet::getStartingDelta(){
 
 
 void NeuralNet::getCost(){
-    //Get a cost variable onto the GPU
-    float* cost;
+    //init cost
+    float * cost;
     CUDA_CHECK(cudaMalloc(&cost, sizeof(float)));
     CUDA_CHECK(cudaMemset(cost, 0, sizeof(float)));
     
@@ -100,7 +108,6 @@ void NeuralNet::getCost(){
     costKernel<<<numBlocks, threadsPerBlock>>>(predictions, correctOutputs, cost, numSamples, outputSize);
     CUDA_CHECK(cudaMemcpy(&curr_cost, cost, sizeof(float), cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaFree(cost));
-    std::cout<<"Cost: "<<curr_cost<<"\n";
     
 }
 
@@ -147,9 +154,16 @@ void NeuralNet::backProp(){
 }
 
 void NeuralNet::train(){
-    for(int epoch = 0; epoch < 5000; epoch++){
+    for(int epoch = 0; epoch < 300000; epoch++){
         forwardPass();
         backProp();
+        if(epoch == 150000){
+            learning_rate = 0.005f;
+            std::cout << "Learning rate reduced to 0.005\n";
+        }
+        if(epoch % 2000 == 0){
+            std::cout << "Epoch " << epoch << " | Cost: " << curr_cost << "\n";
+        }
         if(curr_cost < 1e-6){
             break;
         }
@@ -167,5 +181,6 @@ NeuralNet::~NeuralNet(){
     CUDA_CHECK(cudaFree(predictions));
     CUDA_CHECK(cudaFree(correctOutputs));
     CUDA_CHECK(cudaFree(startingDelta));
+    CUBLAS_CHECK(cublasDestroy(handle));
 }
 

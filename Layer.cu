@@ -6,6 +6,8 @@
 #include <cuda_runtime.h>
 #include <string>
 
+cublasHandle_t Layer::handle;
+
 Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples, bool lastLayer, std::string activation_func, int index){
     //n_in = how many nodes are in our layer, n_out = how many nodes are in the next layer,
     //ie. how many weights each node needs to have. n_out = how many nodes are in the next layer,
@@ -101,7 +103,7 @@ Layer::Layer(Layer&& other) noexcept {
 
 float* Layer::getNextLayer(float* prevLayer){
     //multiply weights x prevLayer first, store it in preactivation (z)
-    cudaMultiply(weights, prevLayer, z, n_out, samples, n_in);
+    cudaMultiply(weights, prevLayer, z, n_out, samples, n_in, handle);
     CUDA_CHECK(cudaDeviceSynchronize());
 
     //Add this matrix and biases
@@ -130,7 +132,7 @@ float* Layer::getNextLayer(float* prevLayer){
 
 float* Layer::getNextLayerPrediction(float* prevLayer){
     //multiply weights x prevLayer first, store it in preactivation (prediction_z)
-    cudaMultiply(weights, prevLayer, prediction_z, n_out, 1, n_in);
+    cudaMultiply(weights, prevLayer, prediction_z, n_out, 1, n_in, handle);
     CUDA_CHECK(cudaDeviceSynchronize());
 
     //Add this matrix and biases
@@ -196,7 +198,7 @@ void Layer::setWeights(std::vector<float> hardcodedWeights){
 //using RELU -> second ptr is z_l, using tanh -> second ptr is a_l
 float* Layer::getDelta(float* deltaLPlusOne, float* z_l_or_a_l){
     //compute weights^T*delta^l+1 first, where M = n_in, K = n_out, N = samples
-    cudaMultiply(weights, deltaLPlusOne, delta, n_in, samples, n_out, CUBLAS_OP_T, CUBLAS_OP_N);
+    cudaMultiply(weights, deltaLPlusOne, delta, n_in, samples, n_out, handle, CUBLAS_OP_T, CUBLAS_OP_N);
     int threadsPerBlock, numBlocks;
     getThreadsBlocks(threadsPerBlock, numBlocks, n_in*samples);
 
@@ -231,7 +233,7 @@ void Layer::getWeightGradients(float* delta_l, float* a_l_minus_one){
     //follow formula: dC/dW_l = delta_l * (a_l-1)^T
     //delta_l = n_out x samples, a_l-1 = n_in x samples
     //thus, M = n_out, K = samples, M = n_in
-    cudaMultiply(delta_l, a_l_minus_one, weight_gradients, n_out, n_in, samples, CUBLAS_OP_N, CUBLAS_OP_T);
+    cudaMultiply(delta_l, a_l_minus_one, weight_gradients, n_out, n_in, samples, handle, CUBLAS_OP_N, CUBLAS_OP_T);
     //average out by multiplying by 1/samples
     int threadsPerBlock, numBlocks;
     getThreadsBlocks(threadsPerBlock, numBlocks, n_out*n_in);
@@ -239,6 +241,8 @@ void Layer::getWeightGradients(float* delta_l, float* a_l_minus_one){
 }
 
 void Layer::getBiasGradients(float* delta_l){
+    //get rid of previous bias gradient so that the column sum doesn't add to this
+    CUDA_CHECK(cudaMemset(bias_gradients, 0.0, n_out*sizeof(float)));
     int threadsPerBlock, numBlocks;
     getThreadsBlocks(threadsPerBlock, numBlocks, n_out*samples);
     //column sum for each delta from each sample

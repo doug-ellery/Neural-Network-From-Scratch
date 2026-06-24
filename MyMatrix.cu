@@ -3,37 +3,22 @@
 #include <chrono>
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
-#include <cuda_fp16.h>
 #include "MyMatrix.h"
 #include <curand_kernel.h>
 
 
 
 //multiply two matrices A and B, where A = M x K, B = K x N
-void cudaMultiply(float* A, float* B, float* d_C, int M, int N, int K, cublasOperation_t opA, cublasOperation_t opB){
+void cudaMultiply(float* A, float* B, float* d_C, int M, int N, int K, cublasHandle_t handle, cublasOperation_t opA, cublasOperation_t opB){
 
     //output array d_C = M x N
     CUDA_CHECK(cudaMemset(d_C, 0, M*N*sizeof(float)));
     
-    //we need to use the __half versions of A and B
-    __half* d_A, *d_B;
-    CUDA_CHECK(cudaMalloc(&d_A, M*K*sizeof(__half)));
-    CUDA_CHECK(cudaMalloc(&d_B, K*N*sizeof(__half)));
-    floatToHalfCast(A, d_A, M*K);
-    floatToHalfCast(B, d_B, K*N);
 
     //get leading dimensions for gemm ex
     int lda = (opB == CUBLAS_OP_N) ? N : K;
     int ldb = (opA == CUBLAS_OP_N) ? K : M;
-
     
-
-    //CUBLAS handle initialize
-    cublasHandle_t handle;
-    CUBLAS_CHECK(cublasCreate(&handle));
-
-    //Enable tensor cores to be used
-    CUBLAS_CHECK(cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH));
 
     //scalars which cublas uses in the equation C = alpha*A*B + beta*C
     //we just want C = A*B, so set alpha/beta accordingly
@@ -46,24 +31,9 @@ void cudaMultiply(float* A, float* B, float* d_C, int M, int N, int K, cublasOpe
     //Because CUBLAS will automatically interpret A and B as A^t and B^t respectivley,
     //we just need to feed two the matrices backwards (B then A), making sure to 
     //also feed the dimensions backwards as well, as opposed to M,N,K
-    CUBLAS_CHECK(cublasGemmEx(
-        handle,
-        opB, opA,
-        N, M, K,
-        (const void*) &alpha,
-        (const void*) d_B, CUDA_R_16F, lda,    //feeding B first with leading dimension (cols)
-        (const void*) d_A, CUDA_R_16F, ldb,    //feeding A second with leading dimension (cols)
-        (const void*) &beta,
-        d_C, CUDA_R_32F, N,
-        CUBLAS_COMPUTE_32F_FAST_TF32,
-        CUBLAS_GEMM_DEFAULT_TENSOR_OP   //use tensor cores for math
-    ));
-    CUDA_CHECK(cudaDeviceSynchronize()); 
+    CUBLAS_CHECK(cublasSgemm(handle, opB, opA, N, M, K, &alpha, B, lda, A, ldb, &beta, d_C, N));
     
-    //Get rid of the half arrays
-    CUDA_CHECK(cudaFree(d_A));
-    CUDA_CHECK(cudaFree(d_B));
-    CUBLAS_CHECK(cublasDestroy(handle));
+    CUDA_CHECK(cudaDeviceSynchronize()); 
 
 }
 
@@ -189,21 +159,6 @@ void cudaReLUActivation(float* A, int size){
     reluActivationKernel<<<numBlocks, threadsPerBlock>>>(A, size);
 }
 
-static __global__ void floatToHalfKernel(float* in, __half* out, int size){
-    int index, jump;
-    getIndexJump(index, jump);
-    for(int i = index; i < size; i += jump){
-        out[i] = __float2half(in[i]);
-    }
-}
-
-void floatToHalfCast(float* in, __half* out, int size){
-    int threadsPerBlock, numBlocks;
-    getThreadsBlocks(threadsPerBlock, numBlocks, size);
-
-    //call floatToHalfKernel
-    floatToHalfKernel<<<numBlocks, threadsPerBlock>>>(in, out, size);
-}
 
 //Kernel for calculating the cost function, using MSE
 
@@ -215,7 +170,7 @@ __global__ void costKernel(float* predictions, float* correctOnes, float* cost, 
         //to cost at the same time, so this avoids race conditions that can lead to wrong answers
         //added a 2 on the bottom to make the derivative cleaner later on, so that the 2 on the 
         // bottom cancels with the 2 that comes on top when we do power rule for the delta calculation
-        atomicAdd(cost, (1.0f)/(2.0f*numSamples)*(predictions[index] - correctOnes[index])*(predictions[index] - correctOnes[index]));
+        atomicAdd(cost, (1.0f)/(2.0f*numSamples)*(predictions[i] - correctOnes[i])*(predictions[i] - correctOnes[i]));
     }
 }
 

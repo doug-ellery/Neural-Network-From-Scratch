@@ -1,5 +1,7 @@
 #include <vector>
 #include <string>
+#include <cublas_v2.h>
+
 
 #ifndef LAYER_H
 #define LAYER_H
@@ -19,6 +21,7 @@ class Layer{
     std::string activation_func;
 
     public:
+        static cublasHandle_t handle;
         Layer(int, int, int, bool, std::string, int);
         Layer(Layer&& other) noexcept;
         float* getNextLayer(float*);
