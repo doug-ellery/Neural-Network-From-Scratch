@@ -17,6 +17,9 @@ class Layer{
     float* delta;
     //For my forward pass logic, so I know whether or not to apply activation
     bool lastLayer;
+    //Adam optimization terms (momentum & variance for weights and biases)
+    float * m_weights, *v_weights, *m_biases, *v_biases;
+    float beta_1, beta_2, epsilon;
 
     std::string activation_func;
 
@@ -42,8 +45,8 @@ class Layer{
         float* getDelta(float* deltaLPlusOne, float* z_l);
         float * returnDelta();
         float* getZ();
-        void updateWeights(float learning_rate);
-        void updateBiases(float learning_rate);
+        void updateWeights(float learning_rate, int t);
+        void updateBiases(float learning_rate, int t);
         ~Layer();
 
         //Don't allow layers to be copied, this causes wierd stuff to happen because we 

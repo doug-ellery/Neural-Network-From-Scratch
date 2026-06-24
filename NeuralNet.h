@@ -21,7 +21,7 @@ class NeuralNet{
         void getCost();
         void getAllDeltas();
         void showAllDeltas();
-        void backProp();
+        void backProp(int t);
         void train();
         std::vector<float> predict(std::vector<float> prediction_inputs);
         ~NeuralNet();

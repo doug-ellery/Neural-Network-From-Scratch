@@ -20,6 +20,9 @@ Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples, bool lastLa
     samples = numSamples;
     this->lastLayer = lastLayer;
     this->activation_func = activation_func;
+    beta_1 = 0.9f;
+    beta_2 = 0.999f;
+    epsilon = 1e-8f;
     //allocate memory for all of our device arrays
     CUDA_CHECK(cudaMalloc((void **)&weights, n_in * n_out *sizeof(float)));
     CUDA_CHECK(cudaMalloc((void **)&biases, n_out * sizeof(float)));
@@ -30,12 +33,15 @@ Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples, bool lastLa
     CUDA_CHECK(cudaMalloc((void**)&bias_gradients, n_out*sizeof(float)));
     CUDA_CHECK(cudaMalloc((void**)&prediction_a, n_out*sizeof(float)));
     CUDA_CHECK(cudaMalloc((void**)&prediction_z, n_out*sizeof(float)));
+    CUDA_CHECK(cudaMalloc((void**)&m_weights, n_in*n_out*sizeof(float)));
+    CUDA_CHECK(cudaMalloc((void**)&v_weights, n_in*n_out*sizeof(float)));
+    CUDA_CHECK(cudaMalloc((void**)&m_biases, n_out*sizeof(float)));
+    CUDA_CHECK(cudaMalloc((void**)&v_biases, n_out*sizeof(float)));
     
 
     
-    //biases can be initialized to 0, same with a, z, delta, and gradients
+    //zero out this memory (weights aren't zeroed out because they are initialized belowcan)
     CUDA_CHECK(cudaMemset((void *)biases, 0.0, n_out * sizeof(float)));
-
     CUDA_CHECK(cudaMemset((void *)a, 0.0, n_out * samples * sizeof(float)));
     CUDA_CHECK(cudaMemset((void *)z, 0.0, n_out * samples * sizeof(float)));
     CUDA_CHECK(cudaMemset((void *)delta, 0.0, n_in * samples * sizeof(float)));
@@ -43,6 +49,10 @@ Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples, bool lastLa
     CUDA_CHECK(cudaMemset((void *)bias_gradients, 0.0, n_out*sizeof(float)));
     CUDA_CHECK(cudaMemset((void *) prediction_a, 0.0, n_out*sizeof(float)));
     CUDA_CHECK(cudaMemset((void *) prediction_z, 0.0, n_out*sizeof(float)));
+    CUDA_CHECK(cudaMemset((void**)m_weights, 0.0, n_in*n_out*sizeof(float)));
+    CUDA_CHECK(cudaMemset((void**)v_weights, 0.0, n_in*n_out*sizeof(float)));
+    CUDA_CHECK(cudaMemset((void**)m_biases, 0.0, n_out*sizeof(float)));
+    CUDA_CHECK(cudaMemset((void**)v_biases, 0.0, n_out*sizeof(float)));
 
     //weights cannot, use He normal initialization because we are using ReLU for now as the activation function
     CUDA_CHECK(cudaMemset((void *)weights, 0, n_in * n_out * sizeof(float)));
@@ -76,6 +86,10 @@ Layer::Layer(Layer&& other) noexcept {
     prediction_a = other.prediction_a;
     prediction_z = other.prediction_z;
     activation_func = other.activation_func;
+    m_weights = other.m_weights;
+    v_weights = other.v_weights;
+    m_biases = other.m_biases;
+    v_biases = other.v_biases;
 
     n_in = other.n_in;
     n_out = other.n_out;
@@ -95,6 +109,10 @@ Layer::Layer(Layer&& other) noexcept {
     other.bias_gradients = nullptr;
     other.prediction_a = nullptr;
     other.prediction_z = nullptr;
+    other.m_weights = nullptr;
+    other.v_weights = nullptr;
+    other.m_biases = nullptr;
+    other.v_biases = nullptr;
 }
 
 //getNextLayer will use the weights, biases, and activation to get us the next layer and 
@@ -276,19 +294,19 @@ float * Layer::returnDelta(){
 }
 
 //updating weights after backprop
-void Layer::updateWeights(float learning_rate){
+void Layer::updateWeights(float learning_rate, int t){
     int threadsPerBlock, numBlocks;
     getThreadsBlocks(threadsPerBlock, numBlocks, n_out*n_in);
     //call the update kernel with the weight array and weight gradient
-    updateParameterKernel<<<numBlocks, threadsPerBlock>>>(weights, weight_gradients, learning_rate, n_out*n_in);
+    updateParameterKernel<<<numBlocks, threadsPerBlock>>>(weights, weight_gradients, learning_rate, n_out*n_in, m_weights, v_weights, beta_1, beta_2, epsilon, t);
 }
 
 //updating biases after backprop
-void Layer::updateBiases(float learning_rate){
+void Layer::updateBiases(float learning_rate, int t){
     int threadsPerBlock, numBlocks;
     getThreadsBlocks(threadsPerBlock, numBlocks, n_out);
     //call the update kernel with the bias array and bias gradient
-    updateParameterKernel<<<numBlocks, threadsPerBlock>>>(biases, bias_gradients, learning_rate, n_out);
+    updateParameterKernel<<<numBlocks, threadsPerBlock>>>(biases, bias_gradients, learning_rate, n_out, m_biases, v_biases, beta_1, beta_2, epsilon, t);
 }
 
 Layer::~Layer(){
@@ -301,6 +319,10 @@ Layer::~Layer(){
     CUDA_CHECK(cudaFree(bias_gradients));
     CUDA_CHECK(cudaFree(prediction_a));
     CUDA_CHECK(cudaFree(prediction_z));
+    CUDA_CHECK(cudaFree(m_weights));
+    CUDA_CHECK(cudaFree(v_weights));
+    CUDA_CHECK(cudaFree(m_biases));
+    CUDA_CHECK(cudaFree(v_biases));
 }
 
 

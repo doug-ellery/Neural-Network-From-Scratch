@@ -17,7 +17,7 @@ NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize
         exit(1);
     }
     this->activation_func = activation_func;
-    learning_rate = 0.03f;
+    learning_rate = 0.0006f;
     curr_cost = INT_MAX;
     CUBLAS_CHECK(cublasCreate(&handle));
 
@@ -133,7 +133,7 @@ void NeuralNet::showAllDeltas(){
     }
 }
 
-void NeuralNet::backProp(){
+void NeuralNet::backProp(int t){
     getCost();
     getStartingDelta();
     getAllDeltas();
@@ -144,8 +144,8 @@ void NeuralNet::backProp(){
         layers[i].getWeightGradients(delta_l, a_l_minus_one);
         layers[i].getBiasGradients(delta_l);
         //update based on those gradients
-        layers[i].updateWeights(learning_rate);
-        layers[i].updateBiases(learning_rate);
+        layers[i].updateWeights(learning_rate, t);
+        layers[i].updateBiases(learning_rate, t);
         delta_l = layers[i].returnDelta();
         if(i != 0){
             a_l_minus_one = i == 1 ? inputs : layers[i - 2].getActivation();
@@ -154,19 +154,18 @@ void NeuralNet::backProp(){
 }
 
 void NeuralNet::train(){
+    //Adam needs this t variable that increments once per epoch
+    int t = 1;
     for(int epoch = 0; epoch < 300000; epoch++){
         forwardPass();
-        backProp();
-        if(epoch == 150000){
-            learning_rate = 0.005f;
-            std::cout << "Learning rate reduced to 0.005\n";
-        }
+        backProp(t);
         if(epoch % 2000 == 0){
-            std::cout << "Epoch " << epoch << " | Cost: " << curr_cost << "\n";
+            std::cout<<"Epoch "<<epoch<<" | Cost "<<curr_cost<<"\n";
         }
         if(curr_cost < 1e-6){
             break;
         }
+        t++;
     }
 }
 

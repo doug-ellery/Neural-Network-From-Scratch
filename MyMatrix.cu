@@ -229,12 +229,35 @@ __global__ void scalarMultiplyKernel(float * mat, float scalar, int size){
 }
 
 //for updating either the weights or biases after running back prop
-__global__ void updateParameterKernel(float * params, float * gradient, float learning_rate, int size){
+__global__ void updateParameterKernel(float * params, float * gradient, float learning_rate, int size, float * momentum, float * variance, float beta_1, float beta_2, float epsilon, int t){
     int index, jump;
     getIndexJump(index, jump);
     for(int i = index; i < size; i += jump){
-        //follow formula: W = W - lr*dW or B = B - lr*dB
-        params[i] -= learning_rate * gradient[i];
+        /*//gradient clip first to prevent nan explosion
+        float g = gradient[i];
+        g = fmaxf(-1.0f, fminf(1.0f, g));*/
+        /*
+        Start by updating momentum and variance:
+        m = β1 * m + (1 - β1) * gradient
+        v = β2 * v + (1 - β2) * gradient²
+        */
+        momentum[i] = beta_1 * momentum[i] + (1 - beta_1) * gradient[i];
+        variance[i] = beta_2 * variance[i] + (1 - beta_2) * gradient[i] * gradient[i];
+        /*
+        Now follow this formula:
+        m̂ = m / (1 - β1^t)
+        v̂ = v / (1 - β2^t)
+        */
+        float m_hat, v_hat;
+        m_hat = momentum[i] / (1 - powf(beta_1, t));
+        v_hat = variance[i] / (1 - powf(beta_2, t));
+        /*
+        Final step:
+        w = w - lr * m̂ / (sqrt(v̂) + ε), this was for weights, but same thing if it is biases
+        */
+        params[i] = params[i] - learning_rate * m_hat / (sqrtf(v_hat) + epsilon);
+        
+        
     }
 }
 
