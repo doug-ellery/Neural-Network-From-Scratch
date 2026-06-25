@@ -27,10 +27,10 @@ class Layer{
         static cublasHandle_t handle;
         Layer(int, int, int, bool, std::string, int);
         Layer(Layer&& other) noexcept;
-        float* getNextLayer(float*);
+        float* getNextLayer(float* prevLayer, int batch_size);
         float* getNextLayerPrediction(float* prevLayer);
-        void getWeightGradients(float* delta_l, float* a_l_minus_one);
-        void getBiasGradients(float* delta_l);
+        void getWeightGradients(float* delta_l, float* a_l_minus_one, int batch_size);
+        void getBiasGradients(float* delta_l, int batch_size);
         void setWeights(std::vector<float> hardcodedWeights);
         void setBiases(std::vector<float> hardcodedBiases);
         void printActivation();
@@ -42,7 +42,7 @@ class Layer{
         void printNodes();
         void printDelta();
         float * getActivation();
-        float* getDelta(float* deltaLPlusOne, float* z_l);
+        float* getDelta(float* deltaLPlusOne, float* z_l, int batch_size);
         float * returnDelta();
         float* getZ();
         void updateWeights(float learning_rate, int t);

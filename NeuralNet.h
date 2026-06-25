@@ -10,18 +10,18 @@
 class NeuralNet{
     
     float* inputs, *predictions, *correctOutputs, *startingDelta, learning_rate, curr_cost;
-    int numSamples, outputSize, inputSize;
+    int numSamples, outputSize, inputSize, batch_size;
     std::string activation_func;
     cublasHandle_t handle;
     public:
         std::vector<Layer> layers;
         NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>&, std::vector<float>&, std::string);
-        std::vector<float> forwardPass(std::vector<float> prediction_inputs = {});
-        void NeuralNet::getStartingDelta();
-        void getCost();
+        std::vector<float> forwardPass(float * batch_input);
+        void NeuralNet::getStartingDelta(float * batch_output);
+        void getCost(float* batch_output);
         void getAllDeltas();
         void showAllDeltas();
-        void backProp(int t);
+        void backProp(int t, float* batch_input, float* batch_output);
         void train();
         std::vector<float> predict(std::vector<float> prediction_inputs);
         ~NeuralNet();
