@@ -6,6 +6,8 @@
 #include <climits>
 #include <string>
 #include <cublas_v2.h>
+#include <numeric>
+#include <random>
 
 
 NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>& data, std::vector<float>& outputs, std::string activation_func){
@@ -48,8 +50,16 @@ NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize
     //get starting delta allocated
     CUDA_CHECK(cudaMalloc(&startingDelta, outputSize*numSamples*sizeof(float)));
     CUDA_CHECK(cudaMemset(startingDelta, 0, outputSize*numSamples*sizeof(float)));
-
-    
+    //make host side inputs and outputs, without making copies because these could be very large
+    h_inputs = std::move(data);
+    h_outputs = std::move(outputs);
+    shuffled_inputs.resize(h_inputs.size());
+    shuffled_outputs.resize(h_outputs.size());
+    h_inputs_indices.resize(numSamples);
+    //fill h_inputs_indices with values 0 -> numSamples - 1, each index maps to one sample in h_inputs that will be shuffled later
+    std::iota(h_inputs_indices.begin(), h_inputs_indices.end(), 0);
+    //random seed for std::shuffle
+    rng = std::mt19937{std::random_device{}()};
 
 }
 
@@ -143,6 +153,21 @@ void NeuralNet::train(){
     int t = 1;
     int num_batches = numSamples / batch_size;
     for(int epoch = 0; epoch < 300000; epoch++){
+        //Shuffle inputs and correctOutputs
+        std::shuffle(h_inputs_indices.begin(), h_inputs_indices.end(), rng);
+        //use these shuffled indices to shuffle the arrays using std::copy
+        //we aren't necessarily just moving one number over, we are copying one input/output 
+        //sample at a time, which is inputSize and outputSize number of elements
+        for(int i = 0; i < numSamples; i++){
+            //the index for the random samples that we want to copy into the i'th sample in
+            //shuffled_inputs/outputs
+            int src = h_inputs_indices[i];
+            std::copy(h_inputs.begin() + src * inputSize, h_inputs.begin() + src * inputSize + inputSize, shuffled_inputs.begin() + i * inputSize);
+            std::copy(h_outputs.begin() + src * outputSize, h_outputs.begin() + src * outputSize + outputSize, shuffled_outputs.begin() + i * outputSize);
+        }
+        //copy the shuffled versions of inputs and outputs onto the GPU
+        CUDA_CHECK(cudaMemcpy(inputs, shuffled_inputs.data(), inputSize * numSamples * sizeof(float), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(correctOutputs, shuffled_outputs.data(), outputSize * numSamples * sizeof(float), cudaMemcpyHostToDevice));
         for(int batch = 0; batch < num_batches; batch++){
             float * batch_input = inputs + batch * batch_size * inputSize;
             float * batch_output = correctOutputs + batch * batch_size * outputSize;

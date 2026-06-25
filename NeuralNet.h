@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <cublas_v2.h>
+#include <random>
 
 
 #ifndef NEURALNET_H
@@ -13,6 +14,11 @@ class NeuralNet{
     int numSamples, outputSize, inputSize, batch_size;
     std::string activation_func;
     cublasHandle_t handle;
+    //host side arrays for the inputs and outputs
+    std::vector<float> h_inputs, h_outputs, shuffled_inputs, shuffled_outputs;
+    //members needed for shuffling the inputs and outputs
+    std::vector<int> h_inputs_indices;
+    std::mt19937 rng;
     public:
         std::vector<Layer> layers;
         NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>&, std::vector<float>&, std::string);
