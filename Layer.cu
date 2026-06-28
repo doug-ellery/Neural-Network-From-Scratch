@@ -158,44 +158,6 @@ float* Layer::getNextLayer(float* prevLayer, int batch_size){
     return out;
 }
 
-//Helper function for debugging the weights
-void Layer::printWeights(){
-    std::vector<float> printer(n_out*n_in, 0);
-    std::cout<<"Weights: \n";
-    CUDA_CHECK(cudaMemcpy(printer.data(), weights, n_out*n_in*sizeof(float), cudaMemcpyDeviceToHost));
-    printVec(printer, n_out, n_in);
-}
-
-void Layer::printBiases(){
-    std::vector<float> printer(n_out, 0);
-    std::cout<<"Biases: \n";
-    CUDA_CHECK(cudaMemcpy(printer.data(), biases, n_out*sizeof(float), cudaMemcpyDeviceToHost));
-    printVec(printer, n_out, 1);
-}
-
-//for debugging
-void Layer::printActivation(){
-    std::vector<float> nodes(n_out*samples, 0);
-    CUDA_CHECK(cudaMemcpy(nodes.data(), a, n_out*samples*sizeof(float), cudaMemcpyDeviceToHost));
-    printVec(nodes, n_out, samples);
-}
-//for debugging
-void Layer::printPreActivation(){
-    std::vector<float> nodes(n_out*samples, 0);
-    CUDA_CHECK(cudaMemcpy(nodes.data(), z, n_out*samples*sizeof(float), cudaMemcpyDeviceToHost));
-    for(int i = 0; i < nodes.size(); i++){
-        std::cout<<nodes[i]<<"\n";
-    }
-}
-
-void Layer::setBiases(std::vector<float> hardcodedBiases){
-    CUDA_CHECK(cudaMemcpy((void *)biases, hardcodedBiases.data(), n_out*sizeof(float), cudaMemcpyHostToDevice));
-}
-
-void Layer::setWeights(std::vector<float> hardcodedWeights){
-    CUDA_CHECK(cudaMemcpy((void *)weights, hardcodedWeights.data(), n_out*n_in*sizeof(float), cudaMemcpyHostToDevice));
-}
-
 //get the previous delta given the delta of the layer after this one
 //using RELU -> second ptr is z_l, using tanh -> second ptr is a_l
 float* Layer::getDelta(float* deltaLPlusOne, float* z_l_or_a_l, int batch_size){
@@ -223,12 +185,6 @@ float* Layer:: getZ(){
 }
 
 
-void Layer::printDelta(){
-    std::vector<float> printer(n_in*samples);
-    CUDA_CHECK(cudaMemcpy(printer.data(), delta, n_in*samples*sizeof(float), cudaMemcpyDeviceToHost));
-    printVec(printer, n_in, samples);
-}
-
 //gradient functions, important note: I needed to get passed delta_l because technically 
 //the delta stored in this layer is actually delta_l-1, when using standard layer conventions
 void Layer::getWeightGradients(float* delta_l, float* a_l_minus_one, int batch_size){
@@ -255,18 +211,6 @@ void Layer::getBiasGradients(float* delta_l, int batch_size){
     //average out
     getThreadsBlocks(threadsPerBlock, numBlocks, n_out);
     scalarMultiplyKernel<<<numBlocks, threadsPerBlock>>>(bias_gradients, 1.0f/batch_size, n_out);
-}
-
-void Layer::printWeightGradients(){
-    std::vector<float> printer(n_out*n_in);
-    CUDA_CHECK(cudaMemcpy(printer.data(), weight_gradients, n_out*n_in*sizeof(float), cudaMemcpyDeviceToHost));
-    printVec(printer, n_out, n_in);
-}
-
-void Layer::printBiasGradients(){
-    std::vector<float> printer(n_out);
-    CUDA_CHECK(cudaMemcpy(printer.data(), bias_gradients, n_out*sizeof(float), cudaMemcpyDeviceToHost));
-    printVec(printer, n_out, 1);
 }
 
 float * Layer::getActivation(){

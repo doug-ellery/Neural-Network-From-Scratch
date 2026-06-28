@@ -39,7 +39,6 @@ __global__ void reluActivationKernel(float* layer, int size);
 void cudaReLUActivation(float* A, int size);
 __global__ void costKernel(float* predictions, float* correctOnes, float* cost, int numSamples, int outputSize);
 __global__ void startingDeltaKernel(float* predictions, float* correctOnes, float* startingDeltas, int size, int batch_size, int output_size);
-__global__ void weightedSumKernel(float* deltaLPlusOne, float* weights, int n_out, int n_in, float* weightedSum, int batchNum, int j);
 __global__ void deltaKernel(float* delta, float* deltaLPlusOne, float* z, float* weights, int n_out, int n_in, int numSamples);
 __global__ void reluPrimeKernel(float* z, float* deltaL, int n_in, int numSamples);
 void printVec(std::vector<float> vec, int M, int N);

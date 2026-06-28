@@ -124,15 +124,6 @@ void NeuralNet::getAllDeltas(){
     }
 }
 
-void NeuralNet::showAllDeltas(){
-    std::vector<float> outputDelta(outputSize*numSamples);
-    CUDA_CHECK(cudaMemcpy(outputDelta.data(), startingDelta, outputSize*numSamples*sizeof(float), cudaMemcpyDeviceToHost));
-    printVec(outputDelta, outputSize, numSamples);
-    for(int i = layers.size() - 1; i > 0; i--){
-        std::cout<<"\n\n";
-        layers[i].printDelta();
-    }
-}
 
 void NeuralNet::backProp(int t, float * batch_input, float * batch_output, bool shouldLog){
     getCost(batch_output);
@@ -180,6 +171,7 @@ void NeuralNet::train(){
         //copy the shuffled versions of inputs and outputs onto the GPU
         CUDA_CHECK(cudaMemcpy(inputs, shuffled_inputs.data(), inputSize * numSamples * sizeof(float), cudaMemcpyHostToDevice));
         CUDA_CHECK(cudaMemcpy(correctOutputs, shuffled_outputs.data(), outputSize * numSamples * sizeof(float), cudaMemcpyHostToDevice));
+        float epoch_cost = 0.0f;
         for(int batch = 0; batch < num_batches; batch++){
             bool shouldLog = batch == 0;
             float * batch_input = inputs + batch * batch_size * inputSize;
@@ -191,10 +183,11 @@ void NeuralNet::train(){
                 layers.back().logZStats(batch_size);
             }*/
             backProp(t, transposed_batch, batch_output, shouldLog);
+            epoch_cost += curr_cost;
             t++;
         }
         if(epoch % 1 == 0){
-            std::cout<<"Epoch "<<epoch<<" | Cost "<<curr_cost<<"\n";
+            std::cout<<"Epoch "<<epoch<<" | Avg. Cost Over Mini Batches "<<epoch_cost / num_batches<<"\n";
         }
     }
 }
