@@ -38,7 +38,7 @@ Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples, bool lastLa
     
 
     
-    //zero out this memory (weights aren't zeroed out because they are initialized belowcan)
+    //zero out this memory (weights aren't zeroed out because they are initialized below)
     CUDA_CHECK(cudaMemset((void *)biases, 0.0, n_out * sizeof(float)));
     CUDA_CHECK(cudaMemset((void *)a, 0.0, n_out * samples * sizeof(float)));
     CUDA_CHECK(cudaMemset((void *)z, 0.0, n_out * samples * sizeof(float)));
@@ -235,56 +235,6 @@ void Layer::updateBiases(float learning_rate, int t){
     getThreadsBlocks(threadsPerBlock, numBlocks, n_out);
     //call the update kernel with the bias array and bias gradient
     updateParameterKernel<<<numBlocks, threadsPerBlock>>>(biases, bias_gradients, learning_rate, n_out, m_biases, v_biases, beta_1, beta_2, epsilon, t);
-}
-
-void Layer::logGradientStats(){
-    std::vector<float> w_grads(n_out*n_in);
-    CUDA_CHECK(cudaMemcpy(w_grads.data(), weight_gradients, n_out*n_in*sizeof(float), cudaMemcpyDeviceToHost));
-    std::vector<float> b_grads(n_out);
-    CUDA_CHECK(cudaMemcpy(b_grads.data(), bias_gradients, n_out*sizeof(float), cudaMemcpyDeviceToHost));
-    float w_max = 0.0f;
-    float w_mean = 0.0f;
-    long w_infinites = 0;
-    for(float grad : w_grads){
-        w_max = std::max(w_max, std::fabs(grad));
-        w_mean += std::fabs(grad) / (n_out*n_in);
-        if (!std::isfinite(grad)) {
-            w_infinites++;
-        }
-    }
-    float b_max = 0.0f;
-    float b_mean = 0.0f;
-    long b_infinites = 0;
-    for(float grad : b_grads){
-        b_max = std::max(b_max, std::fabs(grad));
-        b_mean += std::fabs(grad) / n_out;
-        if (!std::isfinite(grad)) {
-            b_infinites++;
-        }
-    }
-    std::cout << "Weight gradients\n";
-    std::cout << "  max |dW| = " << w_max << "\n";
-    std::cout << "  mean|dW| = " << w_mean << "\n";
-    std::cout << "Num infinites: "<<w_infinites<<"\n";
-
-    std::cout << "Bias gradients\n";
-    std::cout << "  max |db| = " << b_max << "\n";
-    std::cout << "  mean|db| = " << b_mean << "\n";
-    std::cout << "Num infinites: "<<b_infinites<<"\n\n";
-}
-
-void Layer::logZStats(int batch_size){
-    std::vector<float> logits(n_out*batch_size);
-    CUDA_CHECK(cudaMemcpy(logits.data(), z, n_out*batch_size*sizeof(float), cudaMemcpyDeviceToHost));
-    float z_max = -std::numeric_limits<float>::infinity();
-    float z_min =  std::numeric_limits<float>::infinity();
-    float mean = 0;
-    for(float node : logits){
-        z_max = std::max(node, z_max);
-        z_min = std::min(node, z_min);
-        mean += std::fabs(node) / (n_out * batch_size);
-    }
-    std::cout<<"Logit stats:\n"<<"Mean: "<<mean<<"\nMax: "<<z_max<<"\nMin: "<<z_min<<"\n\n";
 }
 
 

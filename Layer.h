@@ -36,8 +36,6 @@ class Layer{
         float* getZ();
         void updateWeights(float learning_rate, int t);
         void updateBiases(float learning_rate, int t);
-        void logGradientStats();
-        void logZStats(int batch_size);
         ~Layer();
 
         //Don't allow layers to be copied, this causes wierd stuff to happen because we 

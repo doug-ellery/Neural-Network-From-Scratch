@@ -125,7 +125,7 @@ void NeuralNet::getAllDeltas(){
 }
 
 
-void NeuralNet::backProp(int t, float * batch_input, float * batch_output, bool shouldLog){
+void NeuralNet::backProp(int t, float * batch_input, float * batch_output){
     getCost(batch_output);
     getStartingDelta(batch_output);
     getAllDeltas();
@@ -135,11 +135,6 @@ void NeuralNet::backProp(int t, float * batch_input, float * batch_output, bool 
         //calculate gradients
         layers[i].getWeightGradients(delta_l, a_l_minus_one, batch_size);
         layers[i].getBiasGradients(delta_l, batch_size);
-
-        /*if(shouldLog){
-            std::cout<<"Layer "<<i<<" gradient stats:\n";
-            layers[i].logGradientStats();
-        }*/
 
         //update based on those gradients
         layers[i].updateWeights(learning_rate, t);
@@ -173,16 +168,12 @@ void NeuralNet::train(){
         CUDA_CHECK(cudaMemcpy(correctOutputs, shuffled_outputs.data(), outputSize * numSamples * sizeof(float), cudaMemcpyHostToDevice));
         float epoch_cost = 0.0f;
         for(int batch = 0; batch < num_batches; batch++){
-            bool shouldLog = batch == 0;
             float * batch_input = inputs + batch * batch_size * inputSize;
             float * batch_output = correctOutputs + batch * batch_size * outputSize;
             // MNIST data is sample-major (batch_size x inputSize); transpose to feature-major (inputSize x batch_size)
             transposeMatrix(batch_input, transposed_batch, batch_size, inputSize);
             forwardPass(transposed_batch);
-            /*if (shouldLog){
-                layers.back().logZStats(batch_size);
-            }*/
-            backProp(t, transposed_batch, batch_output, shouldLog);
+            backProp(t, transposed_batch, batch_output);
             epoch_cost += curr_cost;
             t++;
         }
