@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.24)
 
 # Find CUDA toolkit (for cublas, curand)
 find_package(CUDAToolkit REQUIRED)
@@ -6,7 +6,7 @@ find_package(CUDAToolkit REQUIRED)
 project(run LANGUAGES CXX CUDA)
 
 # Change this number depending on your GPU, this is for 4080
-set(CMAKE_CUDA_ARCHITECTURES 89)
+set(CMAKE_CUDA_ARCHITECTURES native)
 
 # Define the executable
 add_executable(run

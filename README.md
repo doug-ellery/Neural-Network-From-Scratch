@@ -32,11 +32,11 @@ This project implements a fully-connected feed-forward neural network with suppo
 ### Prerequisites
 
 - **CUDA Toolkit**: Version 11.0 or higher
-- **CMake**: Version 3.18 or higher
+- **CMake**: Version 3.24 or higher
 - **C++ Compiler**: GCC, Clang, or MSVC with C++11 support
 - **cuBLAS**: Included with CUDA Toolkit
 
-### Build Instructions
+### Build/Run Instructions
 
 1. **Clone the repository**:
    ```bash
@@ -63,40 +63,8 @@ This project implements a fully-connected feed-forward neural network with suppo
    ```bash
    ./build/run
    ```
+   Do not try to run from within build because then the program wont be able to open the MNIST files
 
-## GPU Configuration
-
-The project is optimized for NVIDIA GPUs with specific compute capabilities. The GPU architecture is specified in `CMakeLists.txt` at **line 9**:
-
-```cmake
-set(CMAKE_CUDA_ARCHITECTURES 89)
-```
-
-### GPU Architecture Numbers
-
-The number (89 in this case) specifies the CUDA compute capability of your GPU:
-
-- **89**: NVIDIA RTX 4080 / RTX 4090 (Ada architecture)
-- **86**: NVIDIA RTX 3060 / RTX 3070 / RTX 3080 (Ampere architecture)
-- **80**: NVIDIA RTX 2080 / A100 (Ampere architecture)
-- **75**: NVIDIA RTX 2060 / RTX 2070 / RTX 2080 Ti (Turing architecture)
-- **70**: NVIDIA Tesla P100 (Pascal architecture)
-
-### Important: Update for Your GPU
-
-If you're using a different GPU, **you must update line 9 in `CMakeLists.txt`** before building:
-
-```cmake
-# Change this number depending on your GPU
-set(CMAKE_CUDA_ARCHITECTURES XX)  # Replace XX with your GPU's compute capability
-```
-
-To find your GPU's compute capability, you can:
-- Check NVIDIA's [GPU Compute Capability Chart](https://developer.nvidia.com/cuda-gpus)
-- Run `nvidia-smi` and look up your GPU model
-- Use the CUDA sample `deviceQuery` utility
-
-## Running the Project
 
 ### Prerequisites for Execution
 
@@ -110,11 +78,6 @@ This is already in the repo that you will clone.
 
 ### Execution
 
-From the build directory, run:
-```bash
-./run
-```
-
 The program will:
 1. Load MNIST training data (60,000 images)
 2. Initialize a neural network with 3 hidden layers of 128 nodes each
@@ -125,12 +88,16 @@ The program will:
 
 ### Example Output
 ```
-Test Accuracy: 97.45%
+Epoch 0 | Avg. Cost Over Mini Batches 0.246144
+Epoch 1 | Avg. Cost Over Mini Batches 0.104006
+Epoch 2 | Avg. Cost Over Mini Batches 0.0701897
+...
+Epoch 29 | Avg. Cost Over Mini Batches 0.012921
+Test Accuracy: 97.95%
 ```
 
-## Architecture Details
 
-### Network Configuration
+### NN Configuration
 
 Default configuration (customizable in `main.cpp`):
 - **Input Layer**: 784 neurons (28×28 pixel MNIST images)
@@ -160,22 +127,9 @@ The implementation efficiently manages GPU memory through custom matrix operatio
 | Component | Technology |
 |-----------|-----------|
 | Computation | CUDA 11.0+ |
-| Linear Algebra | cuBLAS |
-| Build System | CMake 3.18+ |
+| Build System | CMake 3.24+ |
 | Language | C++ 11 / CUDA C |
 | Breakdown | 73.9% CUDA, 25.1% C++, 1% CMake |
 
-## Troubleshooting
-
-### Build Issues
-
-- **CUDA not found**: Ensure CUDA Toolkit is installed and in your PATH
-- **CMake version error**: Update to CMake 3.18 or higher
-- **GPU architecture mismatch**: Verify line 9 of CMakeLists.txt matches your GPU
-
-### Runtime Issues
-
-- **Missing MNIST files**: Ensure dataset files are in the working directory before running
-- **Out of memory**: Check GPU memory availability; reduce `nodesPerHiddenLayer` if needed
 
 
