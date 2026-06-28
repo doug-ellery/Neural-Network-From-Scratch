@@ -21,7 +21,7 @@ This project implements a fully-connected feed-forward neural network with suppo
 ├── main.cpp              # Entry point; loads MNIST data and runs training/testing
 ├── NeuralNet.cu          # Core neural network implementation (forward pass, backprop)
 ├── Layer.cu              # Individual layer computations and activations
-├── MyMatrix.cu           # Custom matrix class with GPU memory management
+├── MyMatrix.cu           # Custom matrix math with CUDA kernels
 ├── DataProcessing.cpp    # MNIST dataset loading and preprocessing
 ├── CMakeLists.txt        # Build configuration with CUDA setup
 └── *.h                   # Corresponding header files
@@ -44,30 +44,24 @@ This project implements a fully-connected feed-forward neural network with suppo
    cd Neural-Network-From-Scratch
    ```
 
-2. **Prepare build directory**:
+2. **Configure with CMake**:
    ```bash
-   mkdir build
-   cd build
+   cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G Ninja
    ```
 
-3. **Configure with CMake**:
+3. **Build the project**:
    ```bash
-   cmake ..
+   cmake --build build
    ```
 
-4. **Build the project**:
+4. **Run the executable**:
+   Windows:
    ```bash
-   cmake --build .
+   .\build\run.exe
    ```
-
-   Or using Make directly:
+   Linux:
    ```bash
-   make
-   ```
-
-5. **Run the executable**:
-   ```bash
-   ./run
+   ./build/run
    ```
 
 ## GPU Configuration
@@ -112,7 +106,7 @@ You'll need the MNIST dataset files in your working directory:
 - `t10k-images.idx3-ubyte` - Test images
 - `t10k-labels.idx1-ubyte` - Test labels
 
-These can be downloaded from the [MNIST Database](http://yann.lecun.com/exdb/mnist/).
+This is already in the repo that you will clone.
 
 ### Execution
 
@@ -156,7 +150,7 @@ The implementation efficiently manages GPU memory through custom matrix operatio
 
 ## Implementation Highlights
 
-- **Custom CUDA Kernels**: Optimized kernels for activation functions (RELU) and layer operations
+- **Custom CUDA Kernels**: Optimized kernels for activation functions (RELU, tanh, soft-max) and layer operations
 - **cuBLAS Integration**: High-performance matrix multiplication via NVIDIA's optimized BLAS library
 - **GPU Memory Management**: Efficient allocation and deallocation of GPU memory
 - **Batch Processing**: Supports batch training for improved GPU utilization
@@ -184,22 +178,4 @@ The implementation efficiently manages GPU memory through custom matrix operatio
 - **Missing MNIST files**: Ensure dataset files are in the working directory before running
 - **Out of memory**: Check GPU memory availability; reduce `nodesPerHiddenLayer` if needed
 
-## Future Enhancements
 
-- [ ] Support for multiple activation functions (Sigmoid, Tanh)
-- [ ] Batch normalization
-- [ ] Dropout regularization
-- [ ] Alternative optimizers (Adam, RMSprop)
-- [ ] Convolutional layer support
-- [ ] Multi-GPU training
-
-## License
-
-This project is provided as an educational implementation of neural networks from scratch.
-
-## References
-
-- [NVIDIA CUDA Documentation](https://docs.nvidia.com/cuda/)
-- [cuBLAS Documentation](https://docs.nvidia.com/cuda/cublas/)
-- [MNIST Database](http://yann.lecun.com/exdb/mnist/)
-- [CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)
