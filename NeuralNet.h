@@ -10,7 +10,7 @@
 
 class NeuralNet{
     
-    float* inputs, *predictions, *correctOutputs, *startingDelta, learning_rate, curr_cost;
+    float* inputs, *predictions, *correctOutputs, *startingDelta, *transposed_batch, learning_rate, curr_cost;
     int numSamples, outputSize, inputSize, batch_size;
     std::string activation_func;
     cublasHandle_t handle;
@@ -27,9 +27,9 @@ class NeuralNet{
         void getCost(float* batch_output);
         void getAllDeltas();
         void showAllDeltas();
-        void backProp(int t, float* batch_input, float* batch_output);
+        void backProp(int t, float* batch_input, float* batch_output, bool shouldLog);
         void train();
-        std::vector<float> predict(std::vector<float> prediction_inputs);
+        std::vector<float> predict(std::vector<float> prediction_inputs, int num_predictions);
         ~NeuralNet();
 
         //Delete copying operators for this class

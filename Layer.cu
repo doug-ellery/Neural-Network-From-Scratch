@@ -31,8 +31,6 @@ Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples, bool lastLa
     CUDA_CHECK(cudaMalloc((void**)&delta, n_in*samples*sizeof(float)));
     CUDA_CHECK(cudaMalloc((void**)&weight_gradients, n_in*n_out*sizeof(float)));
     CUDA_CHECK(cudaMalloc((void**)&bias_gradients, n_out*sizeof(float)));
-    CUDA_CHECK(cudaMalloc((void**)&prediction_a, n_out*sizeof(float)));
-    CUDA_CHECK(cudaMalloc((void**)&prediction_z, n_out*sizeof(float)));
     CUDA_CHECK(cudaMalloc((void**)&m_weights, n_in*n_out*sizeof(float)));
     CUDA_CHECK(cudaMalloc((void**)&v_weights, n_in*n_out*sizeof(float)));
     CUDA_CHECK(cudaMalloc((void**)&m_biases, n_out*sizeof(float)));
@@ -47,8 +45,6 @@ Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples, bool lastLa
     CUDA_CHECK(cudaMemset((void *)delta, 0.0, n_in * samples * sizeof(float)));
     CUDA_CHECK(cudaMemset((void *)weight_gradients, 0.0, n_in*n_out*sizeof(float)));
     CUDA_CHECK(cudaMemset((void *)bias_gradients, 0.0, n_out*sizeof(float)));
-    CUDA_CHECK(cudaMemset((void *) prediction_a, 0.0, n_out*sizeof(float)));
-    CUDA_CHECK(cudaMemset((void *) prediction_z, 0.0, n_out*sizeof(float)));
     CUDA_CHECK(cudaMemset((void**)m_weights, 0.0, n_in*n_out*sizeof(float)));
     CUDA_CHECK(cudaMemset((void**)v_weights, 0.0, n_in*n_out*sizeof(float)));
     CUDA_CHECK(cudaMemset((void**)m_biases, 0.0, n_out*sizeof(float)));
@@ -83,8 +79,6 @@ Layer::Layer(Layer&& other) noexcept {
     delta = other.delta;
     weight_gradients = other.weight_gradients;
     bias_gradients = other.bias_gradients;
-    prediction_a = other.prediction_a;
-    prediction_z = other.prediction_z;
     activation_func = other.activation_func;
     m_weights = other.m_weights;
     v_weights = other.v_weights;
@@ -95,6 +89,9 @@ Layer::Layer(Layer&& other) noexcept {
     n_out = other.n_out;
     samples = other.samples;
     lastLayer = other.lastLayer;
+    beta_1 = other.beta_1;
+    beta_2 = other.beta_2;
+    epsilon = other.epsilon;
     other.n_in = 0;
     other.n_out = 0;
     other.samples = 0;
@@ -107,8 +104,6 @@ Layer::Layer(Layer&& other) noexcept {
     other.delta = nullptr;
     other.weight_gradients = nullptr;
     other.bias_gradients = nullptr;
-    other.prediction_a = nullptr;
-    other.prediction_z = nullptr;
     other.m_weights = nullptr;
     other.v_weights = nullptr;
     other.m_biases = nullptr;
@@ -139,38 +134,27 @@ float* Layer::getNextLayer(float* prevLayer, int batch_size){
             cudaTanhActivation(a, n_out*batch_size);
         }
     }
+    else{
+
+        //if its the last layer, we need to apply softmax, so get the softmax sum and then apply softmax
+        int threadsPerBlock, numBlocks;
+        getThreadsBlocks(threadsPerBlock, numBlocks, n_out*batch_size);
+        float * sums;
+        float * maxes;
+        CUDA_CHECK(cudaMalloc(&sums, batch_size * sizeof(float)));
+        CUDA_CHECK(cudaMalloc(&maxes, batch_size * sizeof(float)));
+        CUDA_CHECK(cudaMemset(sums, 0.0, batch_size * sizeof(float)));
+        getSoftmaxMaxKernel<<<numBlocks, threadsPerBlock>>>(z, maxes, n_out, batch_size);
+        cudaDeviceSynchronize();
+        getSoftmaxSumKernel<<<numBlocks, threadsPerBlock>>>(z, sums, maxes, n_out, batch_size);
+        cudaDeviceSynchronize();
+        softmaxActivationKernel<<<numBlocks, threadsPerBlock>>>(a, sums, maxes, n_out, batch_size);
+        CUDA_CHECK(cudaFree(sums));
+        CUDA_CHECK(cudaFree(maxes));
+    }
     float* out;
     CUDA_CHECK(cudaMalloc((void**)&out, n_out*batch_size*sizeof(float)));
     CUDA_CHECK(cudaMemcpy(out, a, n_out*batch_size*sizeof(float), cudaMemcpyDeviceToDevice));
-    return out;
-}
-
-//A version of getNextLayer designed for when we are running a prediction, and not training using a batch,
-//essentially just getNextLayer but using samples = 1;
-
-float* Layer::getNextLayerPrediction(float* prevLayer){
-    //multiply weights x prevLayer first, store it in preactivation (prediction_z)
-    cudaMultiply(weights, prevLayer, prediction_z, n_out, 1, n_in, handle);
-    CUDA_CHECK(cudaDeviceSynchronize());
-
-    //Add this matrix and biases
-    cudaAdd(prediction_z, biases, n_out, 1);
-
-    //copy z contents into prediction_a, and if there is an activation function, a will change accordingly
-    CUDA_CHECK(cudaMemcpy(prediction_a, prediction_z, n_out*sizeof(float), cudaMemcpyDeviceToDevice));
-
-    if(!lastLayer){
-        //apply the activation to prediction_a now
-        if(activation_func == "RELU"){
-            cudaReLUActivation(prediction_a, n_out * 1);
-        }
-        else{
-            cudaTanhActivation(prediction_a, n_out* 1);
-        }
-    }
-    float* out = nullptr;
-    CUDA_CHECK(cudaMalloc((void**)&out, n_out*sizeof(float)));
-    CUDA_CHECK(cudaMemcpy(out, prediction_a, n_out*sizeof(float), cudaMemcpyDeviceToDevice));
     return out;
 }
 
@@ -309,6 +293,57 @@ void Layer::updateBiases(float learning_rate, int t){
     updateParameterKernel<<<numBlocks, threadsPerBlock>>>(biases, bias_gradients, learning_rate, n_out, m_biases, v_biases, beta_1, beta_2, epsilon, t);
 }
 
+void Layer::logGradientStats(){
+    std::vector<float> w_grads(n_out*n_in);
+    CUDA_CHECK(cudaMemcpy(w_grads.data(), weight_gradients, n_out*n_in*sizeof(float), cudaMemcpyDeviceToHost));
+    std::vector<float> b_grads(n_out);
+    CUDA_CHECK(cudaMemcpy(b_grads.data(), bias_gradients, n_out*sizeof(float), cudaMemcpyDeviceToHost));
+    float w_max = 0.0f;
+    float w_mean = 0.0f;
+    long w_infinites = 0;
+    for(float grad : w_grads){
+        w_max = std::max(w_max, std::fabs(grad));
+        w_mean += std::fabs(grad) / (n_out*n_in);
+        if (!std::isfinite(grad)) {
+            w_infinites++;
+        }
+    }
+    float b_max = 0.0f;
+    float b_mean = 0.0f;
+    long b_infinites = 0;
+    for(float grad : b_grads){
+        b_max = std::max(b_max, std::fabs(grad));
+        b_mean += std::fabs(grad) / n_out;
+        if (!std::isfinite(grad)) {
+            b_infinites++;
+        }
+    }
+    std::cout << "Weight gradients\n";
+    std::cout << "  max |dW| = " << w_max << "\n";
+    std::cout << "  mean|dW| = " << w_mean << "\n";
+    std::cout << "Num infinites: "<<w_infinites<<"\n";
+
+    std::cout << "Bias gradients\n";
+    std::cout << "  max |db| = " << b_max << "\n";
+    std::cout << "  mean|db| = " << b_mean << "\n";
+    std::cout << "Num infinites: "<<b_infinites<<"\n\n";
+}
+
+void Layer::logZStats(int batch_size){
+    std::vector<float> logits(n_out*batch_size);
+    CUDA_CHECK(cudaMemcpy(logits.data(), z, n_out*batch_size*sizeof(float), cudaMemcpyDeviceToHost));
+    float z_max = -std::numeric_limits<float>::infinity();
+    float z_min =  std::numeric_limits<float>::infinity();
+    float mean = 0;
+    for(float node : logits){
+        z_max = std::max(node, z_max);
+        z_min = std::min(node, z_min);
+        mean += std::fabs(node) / (n_out * batch_size);
+    }
+    std::cout<<"Logit stats:\n"<<"Mean: "<<mean<<"\nMax: "<<z_max<<"\nMin: "<<z_min<<"\n\n";
+}
+
+
 Layer::~Layer(){
     CUDA_CHECK(cudaFree(weights));
     CUDA_CHECK(cudaFree(biases));
@@ -317,8 +352,6 @@ Layer::~Layer(){
     CUDA_CHECK(cudaFree(delta));
     CUDA_CHECK(cudaFree(weight_gradients));
     CUDA_CHECK(cudaFree(bias_gradients));
-    CUDA_CHECK(cudaFree(prediction_a));
-    CUDA_CHECK(cudaFree(prediction_z));
     CUDA_CHECK(cudaFree(m_weights));
     CUDA_CHECK(cudaFree(v_weights));
     CUDA_CHECK(cudaFree(m_biases));

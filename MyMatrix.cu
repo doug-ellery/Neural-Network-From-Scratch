@@ -25,7 +25,7 @@ void cudaMultiply(float* A, float* B, float* d_C, int M, int N, int K, cublasHan
     const float alpha = 1.0f;
     const float beta = 0.0f;
 
-    //GPU uses column major indexing, so we will compute B^t * A^t which equals C^t
+    //Cublas uses column major indexing, so we will compute B^t * A^t which equals C^t
     //which is the column major version of C, so when we read it back into the program,
     //C^t will become C because C^t is the column major version of C.
     //Because CUBLAS will automatically interpret A and B as A^t and B^t respectivley,
@@ -160,28 +160,31 @@ void cudaReLUActivation(float* A, int size){
 }
 
 
-//Kernel for calculating the cost function, using MSE
+//Kernel for calculating the cost function, using cross entropy
 
 __global__ void costKernel(float* predictions, float* correctOnes, float* cost, int numSamples, int outputSize){
     int index, jump;
     getIndexJump(index, jump);
     for(int i = index; i < numSamples*outputSize; i += jump){
-        //Key: use atomic addition because multiple threads may be trying to add 
-        //to cost at the same time, so this avoids race conditions that can lead to wrong answers
-        //added a 2 on the bottom to make the derivative cleaner later on, so that the 2 on the 
-        // bottom cancels with the 2 that comes on top when we do power rule for the delta calculation
-        atomicAdd(cost, (1.0f)/(2.0f*numSamples)*(predictions[i] - correctOnes[i])*(predictions[i] - correctOnes[i]));
+        // predictions is feature-major (outputSize x numSamples): class c = i/numSamples, sample s = i%numSamples
+        // correctOnes is sample-major (numSamples x outputSize): index s*outputSize + c
+        int c = i / numSamples;
+        int s = i % numSamples;
+        atomicAdd(cost, -(1.0f)/numSamples*(correctOnes[s * outputSize + c] * logf(predictions[i] + 1e-7f)));
     }
 }
 
-//kernel to get my deltas for the ouput layer, because I am doing batching, this array is 
+//kernel to get my deltas for the ouput layer, because I am doing batching, this array is
 // numNodes x numSamples, as opposed to just numNodes
-__global__ void startingDeltaKernel(float* predictions, float* correctOnes, float* startingDeltas, int size){
+__global__ void startingDeltaKernel(float* predictions, float* correctOnes, float* startingDeltas, int size, int batch_size, int output_size){
     int index, jump;
     getIndexJump(index, jump);
     for(int i = index; i < size; i+= jump){
-        //delta = a_i - y_i for this layer, because of the derivative of MSE
-        startingDeltas[i] = predictions[i] - correctOnes[i];
+        // predictions is feature-major: class c = i/batch_size, sample s = i%batch_size
+        // correctOnes is sample-major: index s*output_size + c
+        int c = i / batch_size;
+        int s = i % batch_size;
+        startingDeltas[i] = predictions[i] - correctOnes[s * output_size + c];
     }
 }
 
@@ -233,16 +236,14 @@ __global__ void updateParameterKernel(float * params, float * gradient, float le
     int index, jump;
     getIndexJump(index, jump);
     for(int i = index; i < size; i += jump){
-        /*//gradient clip first to prevent nan explosion
         float g = gradient[i];
-        g = fmaxf(-1.0f, fminf(1.0f, g));*/
         /*
         Start by updating momentum and variance:
         m = β1 * m + (1 - β1) * gradient
         v = β2 * v + (1 - β2) * gradient²
         */
-        momentum[i] = beta_1 * momentum[i] + (1 - beta_1) * gradient[i];
-        variance[i] = beta_2 * variance[i] + (1 - beta_2) * gradient[i] * gradient[i];
+        momentum[i] = beta_1 * momentum[i] + (1 - beta_1) * g;
+        variance[i] = beta_2 * variance[i] + (1 - beta_2) * g * g;
         /*
         Now follow this formula:
         m̂ = m / (1 - β1^t)
@@ -282,4 +283,55 @@ __global__ void tanhPrimeKernel(float * a, float* delta_l, int n_in, int samples
     for(int i = index; i < n_in*samples; i += jump){
         delta_l[i] *= 1 - a[i]*a[i];
     }
+}
+
+//find the max value per sample (column) for numerical stability in softmax
+__global__ void getSoftmaxMaxKernel(float * z, float * maxes, int rows, int cols){
+    int index, jump;
+    getIndexJump(index, jump);
+    for(int col = index; col < cols; col += jump){
+        float max_val = z[col];
+        for(int row = 1; row < rows; row++){
+            max_val = fmaxf(max_val, z[row * cols + col]);
+        }
+        maxes[col] = max_val;
+    }
+}
+
+//to get the sum of all e^(z_j - max) which is needed for numerically stable softmax
+__global__ void getSoftmaxSumKernel(float * z, float * sums, float * maxes, int rows, int cols){
+    int index, jump;
+    getIndexJump(index, jump);
+    for(int i = index; i < rows*cols; i += jump){
+        int column_index = i % cols;
+        atomicAdd(&sums[column_index], expf(z[i] - maxes[column_index]));
+    }
+}
+
+//softmax activation to turn outputs into a probability distribution that sums to 1.0
+__global__ void softmaxActivationKernel(float * a, float * sums, float * maxes, int rows, int cols){
+    int index, jump;
+    getIndexJump(index, jump);
+    for(int i = index; i < rows*cols; i += jump){
+        int column_index = i % cols;
+        a[i] = expf(a[i] - maxes[column_index]) / sums[column_index];
+    }
+}
+
+// Transpose a rows x cols matrix (row-major) into a cols x rows matrix (row-major)
+__global__ void transposeKernel(float* in, float* out, int rows, int cols){
+    int index, jump;
+    getIndexJump(index, jump);
+    for(int i = index; i < rows*cols; i += jump){
+        int r = i / cols;
+        int c = i % cols;
+        out[c * rows + r] = in[i];
+    }
+}
+
+void transposeMatrix(float* in, float* out, int rows, int cols){
+    int threadsPerBlock, numBlocks;
+    getThreadsBlocks(threadsPerBlock, numBlocks, rows*cols);
+    transposeKernel<<<numBlocks, threadsPerBlock>>>(in, out, rows, cols);
+    CUDA_CHECK(cudaDeviceSynchronize());
 }

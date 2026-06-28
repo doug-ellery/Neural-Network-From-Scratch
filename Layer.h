@@ -10,7 +10,7 @@ class Layer{
     float* weights, *biases;
     int n_in, n_out, samples;
     //activation and preactivation arrays that we'll get from computing the next layer
-    float* a, *z, *prediction_a, *prediction_z;
+    float* a, *z;
     //gradients for the weights and biases
     float* weight_gradients, *bias_gradients;
     //delta array
@@ -28,7 +28,6 @@ class Layer{
         Layer(int, int, int, bool, std::string, int);
         Layer(Layer&& other) noexcept;
         float* getNextLayer(float* prevLayer, int batch_size);
-        float* getNextLayerPrediction(float* prevLayer);
         void getWeightGradients(float* delta_l, float* a_l_minus_one, int batch_size);
         void getBiasGradients(float* delta_l, int batch_size);
         void setWeights(std::vector<float> hardcodedWeights);
@@ -39,7 +38,6 @@ class Layer{
         void printWeightGradients();
         void printBiasGradients();
         void printPreActivation();
-        void printNodes();
         void printDelta();
         float * getActivation();
         float* getDelta(float* deltaLPlusOne, float* z_l, int batch_size);
@@ -47,6 +45,8 @@ class Layer{
         float* getZ();
         void updateWeights(float learning_rate, int t);
         void updateBiases(float learning_rate, int t);
+        void logGradientStats();
+        void logZStats(int batch_size);
         ~Layer();
 
         //Don't allow layers to be copied, this causes wierd stuff to happen because we 

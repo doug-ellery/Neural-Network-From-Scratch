@@ -38,7 +38,7 @@ __global__ void weightXavierInitializeKernel(float* weights, int size, int n_in,
 __global__ void reluActivationKernel(float* layer, int size);
 void cudaReLUActivation(float* A, int size);
 __global__ void costKernel(float* predictions, float* correctOnes, float* cost, int numSamples, int outputSize);
-__global__ void startingDeltaKernel(float* predictions, float* correctOnes, float* startingDeltas, int size);
+__global__ void startingDeltaKernel(float* predictions, float* correctOnes, float* startingDeltas, int size, int batch_size, int output_size);
 __global__ void weightedSumKernel(float* deltaLPlusOne, float* weights, int n_out, int n_in, float* weightedSum, int batchNum, int j);
 __global__ void deltaKernel(float* delta, float* deltaLPlusOne, float* z, float* weights, int n_out, int n_in, int numSamples);
 __global__ void reluPrimeKernel(float* z, float* deltaL, int n_in, int numSamples);
@@ -49,6 +49,11 @@ __global__ void updateParameterKernel(float * params, float * gradient, float le
 __global__ void tanhActivationKernel(float* layer, int size);
 void cudaTanhActivation(float* A, int size);
 __global__ void tanhPrimeKernel(float * a, float* delta_l, int n_in, int samples);
+__global__ void getSoftmaxMaxKernel(float * z, float * maxes, int rows, int cols);
+__global__ void getSoftmaxSumKernel(float * z, float * sums, float * maxes, int rows, int cols);
+__global__ void softmaxActivationKernel(float * a, float * sums, float * maxes, int rows, int cols);
+__global__ void transposeKernel(float* in, float* out, int rows, int cols);
+void transposeMatrix(float* in, float* out, int rows, int cols);
 
 
 #endif

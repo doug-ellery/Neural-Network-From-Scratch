@@ -19,7 +19,7 @@ NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize
         exit(1);
     }
     this->activation_func = activation_func;
-    learning_rate = 0.0006f;
+    learning_rate = 0.001f;
     curr_cost = INT_MAX;
     CUBLAS_CHECK(cublasCreate(&handle));
 
@@ -50,6 +50,8 @@ NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize
     //get starting delta allocated
     CUDA_CHECK(cudaMalloc(&startingDelta, outputSize*numSamples*sizeof(float)));
     CUDA_CHECK(cudaMemset(startingDelta, 0, outputSize*numSamples*sizeof(float)));
+    //buffer for transposing each batch from (batch_size x inputSize) to (inputSize x batch_size)
+    CUDA_CHECK(cudaMalloc(&transposed_batch, inputSize * batch_size * sizeof(float)));
     //make host side inputs and outputs, without making copies because these could be very large
     h_inputs = std::move(data);
     h_outputs = std::move(outputs);
@@ -59,7 +61,8 @@ NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize
     //fill h_inputs_indices with values 0 -> numSamples - 1, each index maps to one sample in h_inputs that will be shuffled later
     std::iota(h_inputs_indices.begin(), h_inputs_indices.end(), 0);
     //random seed for std::shuffle
-    rng = std::mt19937{std::random_device{}()};
+    std::random_device rd;
+    rng = std::mt19937{rd()};
 
 }
 
@@ -84,7 +87,7 @@ void NeuralNet::getStartingDelta(float * batch_output){
     getThreadsBlocks(threadsPerBlock, numBlocks, batch_size*outputSize);
 
     //call starting delta kernel
-    startingDeltaKernel<<<numBlocks, threadsPerBlock>>>(predictions, batch_output, startingDelta, batch_size*outputSize);
+    startingDeltaKernel<<<numBlocks, threadsPerBlock>>>(predictions, batch_output, startingDelta, batch_size*outputSize, batch_size, outputSize);
 
 }
 
@@ -116,6 +119,9 @@ void NeuralNet::getAllDeltas(){
         }
         deltaLPlusOne = temp;
     }
+    if(deltaLPlusOne != startingDelta){
+        CUDA_CHECK(cudaFree(deltaLPlusOne)); 
+    }
 }
 
 void NeuralNet::showAllDeltas(){
@@ -128,7 +134,7 @@ void NeuralNet::showAllDeltas(){
     }
 }
 
-void NeuralNet::backProp(int t, float * batch_input, float * batch_output){
+void NeuralNet::backProp(int t, float * batch_input, float * batch_output, bool shouldLog){
     getCost(batch_output);
     getStartingDelta(batch_output);
     getAllDeltas();
@@ -138,6 +144,12 @@ void NeuralNet::backProp(int t, float * batch_input, float * batch_output){
         //calculate gradients
         layers[i].getWeightGradients(delta_l, a_l_minus_one, batch_size);
         layers[i].getBiasGradients(delta_l, batch_size);
+
+        /*if(shouldLog){
+            std::cout<<"Layer "<<i<<" gradient stats:\n";
+            layers[i].logGradientStats();
+        }*/
+
         //update based on those gradients
         layers[i].updateWeights(learning_rate, t);
         layers[i].updateBiases(learning_rate, t);
@@ -152,7 +164,7 @@ void NeuralNet::train(){
     //Adam needs this t variable that increments once per epoch
     int t = 1;
     int num_batches = numSamples / batch_size;
-    for(int epoch = 0; epoch < 300000; epoch++){
+    for(int epoch = 0; epoch < 30; epoch++){
         //Shuffle inputs and correctOutputs
         std::shuffle(h_inputs_indices.begin(), h_inputs_indices.end(), rng);
         //use these shuffled indices to shuffle the arrays using std::copy
@@ -169,35 +181,51 @@ void NeuralNet::train(){
         CUDA_CHECK(cudaMemcpy(inputs, shuffled_inputs.data(), inputSize * numSamples * sizeof(float), cudaMemcpyHostToDevice));
         CUDA_CHECK(cudaMemcpy(correctOutputs, shuffled_outputs.data(), outputSize * numSamples * sizeof(float), cudaMemcpyHostToDevice));
         for(int batch = 0; batch < num_batches; batch++){
+            bool shouldLog = batch == 0;
             float * batch_input = inputs + batch * batch_size * inputSize;
             float * batch_output = correctOutputs + batch * batch_size * outputSize;
-            forwardPass(batch_input);
-            backProp(t, batch_input, batch_output);
+            // MNIST data is sample-major (batch_size x inputSize); transpose to feature-major (inputSize x batch_size)
+            transposeMatrix(batch_input, transposed_batch, batch_size, inputSize);
+            forwardPass(transposed_batch);
+            /*if (shouldLog){
+                layers.back().logZStats(batch_size);
+            }*/
+            backProp(t, transposed_batch, batch_output, shouldLog);
             t++;
         }
-        if(epoch % 10 == 0){
+        if(epoch % 1 == 0){
             std::cout<<"Epoch "<<epoch<<" | Cost "<<curr_cost<<"\n";
         }
     }
 }
 
 //predict an output by running a forward pass
-std::vector<float> NeuralNet::predict(std::vector<float> prediction_inputs){
-    //prediction_input = device version of prediction_inputs
-    float * prediction_input = nullptr;
-    CUDA_CHECK(cudaMalloc(&prediction_input, prediction_inputs.size()*sizeof(float)));
-    CUDA_CHECK(cudaMemcpy(prediction_input, prediction_inputs.data(), prediction_inputs.size()*sizeof(float), cudaMemcpyHostToDevice));
-    //same logic as forward pass but use getNextLayerPrediction
-    float* prev = layers[0].getNextLayerPrediction(prediction_input);
+std::vector<float> NeuralNet::predict(std::vector<float> prediction_inputs, int num_predictions){
+    float * raw_input = nullptr;
+    CUDA_CHECK(cudaMalloc(&raw_input, prediction_inputs.size()*sizeof(float)));
+    CUDA_CHECK(cudaMemcpy(raw_input, prediction_inputs.data(), prediction_inputs.size()*sizeof(float), cudaMemcpyHostToDevice));
+    // Transpose from sample-major (num_predictions x inputSize) to feature-major (inputSize x num_predictions)
+    float* transposed_pred = nullptr;
+    CUDA_CHECK(cudaMalloc(&transposed_pred, inputSize * num_predictions * sizeof(float)));
+    transposeMatrix(raw_input, transposed_pred, num_predictions, inputSize);
+    CUDA_CHECK(cudaFree(raw_input));
+    //same logic as forward pass
+    float* prev = layers[0].getNextLayer(transposed_pred, num_predictions);
     float* curr = nullptr;
     for(int i = 1; i < layers.size(); i++){
-        curr = layers[i].getNextLayerPrediction(prev);
+        curr = layers[i].getNextLayer(prev, num_predictions);
         CUDA_CHECK(cudaFree(prev));
         prev = curr;
     }
-    std::vector<float> outVec(outputSize);
-    CUDA_CHECK(cudaMemcpy(outVec.data(), prev, outputSize*sizeof(float), cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaFree(prediction_input));
+    // Transpose result from feature-major (outputSize x num_predictions) to sample-major (num_predictions x outputSize)
+    float* transposed_out = nullptr;
+    CUDA_CHECK(cudaMalloc(&transposed_out, outputSize * num_predictions * sizeof(float)));
+    transposeMatrix(prev, transposed_out, outputSize, num_predictions);
+    std::vector<float> outVec(outputSize*num_predictions);
+    CUDA_CHECK(cudaMemcpy(outVec.data(), transposed_out, outputSize*num_predictions*sizeof(float), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaFree(transposed_pred));
+    CUDA_CHECK(cudaFree(prev));
+    CUDA_CHECK(cudaFree(transposed_out));
     return outVec;
 }
 
@@ -207,6 +235,7 @@ NeuralNet::~NeuralNet(){
     CUDA_CHECK(cudaFree(predictions));
     CUDA_CHECK(cudaFree(correctOutputs));
     CUDA_CHECK(cudaFree(startingDelta));
+    CUDA_CHECK(cudaFree(transposed_batch));
     CUBLAS_CHECK(cublasDestroy(handle));
 }
 
