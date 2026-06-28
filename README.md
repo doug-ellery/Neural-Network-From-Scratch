@@ -38,6 +38,8 @@ This project implements a fully-connected feed-forward neural network with suppo
 
 ### Build/Run Instructions
 
+**IMPORTANT NOTICE FOR WINDOWS USER: Before you try and build, you need to run the devshell.bat script provided for you in the repo so that nvcc can find MSVC**
+
 1. **Clone the repository**:
    ```bash
    git clone https://github.com/doug-ellery/Neural-Network-From-Scratch.git
