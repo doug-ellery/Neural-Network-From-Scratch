@@ -4,7 +4,7 @@ A high-performance neural network implementation built from the ground up using 
 
 ## Overview
 
-This project implements a fully-connected feed-forward neural network with support for customizable architecture, multiple activation functions, and GPU-accelerated computations. The network is trained on the MNIST handwritten digit dataset and achieves state-of-the-art accuracy through optimized CUDA kernels and cuBLAS operations.
+This project implements a fully-connected feed-forward neural network with support for customizable architecture, multiple activation functions, and GPU-accelerated computations. The network is trained on the MNIST handwritten digit dataset and achieves 97-98% accuracy consistently through optimized CUDA kernels and cuBLAS operations.
 
 ### Key Features
 
