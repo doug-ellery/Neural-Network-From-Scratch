@@ -38,7 +38,7 @@ This project implements a fully-connected feed-forward neural network with suppo
 
 ### Build/Run Instructions
 
-**IMPORTANT NOTICE FOR WINDOWS USER: Before you try and build, you need to run the devshell.bat script provided for you in the repo so that nvcc can find MSVC**
+**IMPORTANT NOTICE FOR WINDOWS USER: Before you try and build, you need to run the devshell.bat script provided for you in the repo so that nvcc can find MSVC, to ensure devshell works, make sure you have Visual Studio + the desketop developement with C++ workload insatlled**
 
 1. **Clone the repository**:
    ```bash
