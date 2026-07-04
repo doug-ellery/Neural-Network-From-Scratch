@@ -5,7 +5,6 @@ find_package(CUDAToolkit REQUIRED)
 
 project(run LANGUAGES CXX CUDA)
 
-# Change this number depending on your GPU, this is for 4080
 set(CMAKE_CUDA_ARCHITECTURES native)
 
 # Define the executable
