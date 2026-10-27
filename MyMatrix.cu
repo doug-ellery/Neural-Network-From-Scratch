@@ -9,7 +9,7 @@
 
 
 //multiply two matrices A and B, where A = M x K, B = K x N
-void cudaMultiply(float* A, float* B, float* d_C, int M, int N, int K, cublasHandle_t handle, cublasOperation_t opA, cublasOperation_t opB){
+void cudaMultiply(const float* const A, const float* const B, float* d_C, int M, int N, int K, cublasHandle_t handle, cublasOperation_t opA, cublasOperation_t opB){
 
     //output array d_C = M x N
     CUDA_CHECK(cudaMemset(d_C, 0, M*N*sizeof(float)));
@@ -70,7 +70,7 @@ void getThreadsBlocks(int& threadsPerBlock, int& numBlocks, int size){
 //total size of A in A + B = size, A = m x n, but I only need n to extract the row index from
 //it 
 
-static __global__ void addKernel(float* A, float* B, int size, int n){
+static __global__ void addKernel(float* A, const float* const B, int size, int n){
     int index, jump;
     getIndexJump(index, jump);
     int row = -1;
@@ -87,7 +87,7 @@ static __global__ void addKernel(float* A, float* B, int size, int n){
 //identical columns, because it will be N columns of the biases for a given layer, which I
 //need for broadcasting in order to pull off the vectorization
 //Result is stored in A, so that no extra memory is used
-void cudaAdd(float* A, float* B, int M, int N){
+void cudaAdd(float* A, const float* const B, int M, int N){
 
     int threadsPerBlock, numBlocks;
     getThreadsBlocks(threadsPerBlock, numBlocks, M*N);
@@ -176,10 +176,10 @@ __global__ void costKernel(float* predictions, float* correctOnes, float* cost, 
 
 //kernel to get my deltas for the ouput layer, because I am doing batching, this array is
 // numNodes x numSamples, as opposed to just numNodes
-__global__ void startingDeltaKernel(float* predictions, float* correctOnes, float* startingDeltas, int size, int batch_size, int output_size){
+__global__ void startingDeltaKernel(float* predictions, float* correctOnes, float* startingDeltas, int batch_size, int output_size){
     int index, jump;
     getIndexJump(index, jump);
-    for(int i = index; i < size; i+= jump){
+    for(int i = index; i < batch_size*output_size; i+= jump){
         // predictions is feature-major: class c = i/batch_size, sample s = i%batch_size
         // correctOnes is sample-major: index s*output_size + c
         int c = i / batch_size;

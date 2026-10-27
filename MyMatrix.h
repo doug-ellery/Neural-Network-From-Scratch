@@ -29,6 +29,12 @@ do {                                                                          \
     } \
 }
 
+//enum for activation function options
+enum Activation_funcs{
+    ReLU,
+    Tanh
+};
+
 void cudaMultiply(float* A, float* B, float* d_C, int M, int N, int K, cublasHandle_t handle, cublasOperation_t opA = CUBLAS_OP_N, cublasOperation_t opB = CUBLAS_OP_N);
 __device__ void getIndexJump(int& index, int& jump);
 void getThreadsBlocks(int& threadsPerBlock, int& numBlocks, int size);

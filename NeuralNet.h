@@ -10,9 +10,10 @@
 
 class NeuralNet{
     
-    float* inputs, *predictions, *correctOutputs, *startingDelta, *transposed_batch, learning_rate, curr_cost;
+    rmm::device_uvector<float> inputs, predictions, correctOutputs, startingDelta, transposed_batch;
+    float learning_rate, curr_cost;
     int numSamples, outputSize, inputSize, batch_size;
-    std::string activation_func;
+    Activation_funcs activation_func;
     cublasHandle_t handle;
     //host side arrays for the inputs and outputs
     std::vector<float> h_inputs, h_outputs, shuffled_inputs, shuffled_outputs;
@@ -22,7 +23,7 @@ class NeuralNet{
     std::vector<Layer> layers;
 
     public:
-        NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>&, std::vector<float>&, std::string);
+        NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>&, std::vector<float>&, Activation_funcs);
         std::vector<float> forwardPass(float * batch_input);
         void NeuralNet::getStartingDelta(float * batch_output);
         void getCost(float* batch_output);

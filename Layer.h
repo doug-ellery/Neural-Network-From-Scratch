@@ -7,33 +7,26 @@
 #define LAYER_H
 
 class Layer{
-    float* weights, *biases;
+    rmm::device_uvector<float> weights, biases, a, z, weight_gradients, bias_gradients, delta, m_weights, v_weights, m_biases, v_biases;
     int n_in, n_out, samples;
-    //activation and preactivation arrays that we'll get from computing the next layer
-    float* a, *z;
-    //gradients for the weights and biases
-    float* weight_gradients, *bias_gradients;
-    //delta array
-    float* delta;
     //For my forward pass logic, so I know whether or not to apply activation
     bool lastLayer;
-    //Adam optimization terms (momentum & variance for weights and biases)
-    float * m_weights, *v_weights, *m_biases, *v_biases;
     float beta_1, beta_2, epsilon;
 
-    std::string activation_func;
+    Activation_funcs activation_func;
 
     public:
         static cublasHandle_t handle;
-        Layer(int, int, int, bool, std::string, int);
-        Layer(Layer&& other) noexcept;
-        float* getNextLayer(float* prevLayer, int batch_size);
-        void getWeightGradients(float* delta_l, float* a_l_minus_one, int batch_size);
-        void getBiasGradients(float* delta_l, int batch_size);
-        float * getActivation();
-        float* getDelta(float* deltaLPlusOne, float* z_l, int batch_size);
-        float * returnDelta();
-        float* getZ();
+        Layer(int, int, int, bool, Activation_funcs, int);
+        //move constructor
+        Layer(Layer&& other) noexcept = default;
+        const float* getNextLayer(const float* const prevLayer, int batch_size);
+        void getWeightGradients(const float* const delta_l, const float* const  a_l_minus_one, int batch_size);
+        void getBiasGradients(const float* const delta_l, int batch_size);
+        const float * getActivation();
+        const float* getDelta(const float* const deltaLPlusOne, const float* const z_l, int batch_size);
+        const float * returnDelta();
+        const float* getZ();
         void updateWeights(float learning_rate, int t);
         void updateBiases(float learning_rate, int t);
         ~Layer();
