@@ -2,6 +2,7 @@
 #include <vector>
 #include <fstream>
 #include <iostream>
+#include <cstdint>
 
 //for converting the 4 4-byte values at the beginning from big-endian to little-endian
 static uint32_t reverseBytes(uint32_t val){

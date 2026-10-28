@@ -6,9 +6,9 @@ project(run LANGUAGES CXX CUDA)
 find_package(CUDAToolkit REQUIRED)
 find_package(rmm REQUIRED)
 
-#RMM requires C++17 at least
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CUDA_STANDARD 20)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_ARCHITECTURES native)
 
 # Define the executable
@@ -17,7 +17,7 @@ add_executable(run
     DataProcessing.cpp
     NeuralNet.cu
     Layer.cu
-    MyMatrix.cu
+    MyMatrix.cu 
 )
 
 # Link CUDA libraries & RMM

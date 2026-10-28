@@ -7,37 +7,37 @@
 #include <string>
 #include <rmm/device_uvector.hpp>
 #include <rmm/cuda_stream_view.hpp>
+#include "Stream.h"
 
 cublasHandle_t Layer::handle;
 
-Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples, bool lastLayer, Activation_funcs activation_func, int index){
+Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples, bool lastLayer, Activation_funcs activation_func, int index)
+:n_out(nodesNextLayer),
+n_in(nodesThisLayer),
+samples(numSamples),
+weights(nodesThisLayer*nodesNextLayer, default_strm),
+biases(nodesNextLayer, default_strm),
+a(nodesNextLayer*numSamples, default_strm),
+z(nodesNextLayer*numSamples, default_strm),
+delta(nodesThisLayer*numSamples, default_strm),
+weight_gradients(nodesThisLayer*nodesNextLayer, default_strm),
+bias_gradients(nodesNextLayer, default_strm),
+m_weights(nodesThisLayer*nodesNextLayer, default_strm),
+v_weights(nodesThisLayer*nodesNextLayer, default_strm),
+m_biases(nodesNextLayer, default_strm),
+v_biases(nodesNextLayer, default_strm)
+{
     //n_in = how many nodes are in our layer, n_out = how many nodes are in the next layer,
     //ie. how many weights each node needs to have. n_out = how many nodes are in the next layer,
     //and in this design, biases is going to be the biases for the next layer, just how the 
     //weights are the weights that take us to the next layer, thus there are n_out biases for 
     //the next layer as each node has one bias
     //In multiplication, we well treat weights as an n_out x n_in matrix
-    n_in = nodesThisLayer;
-    n_out = nodesNextLayer;
-    samples = numSamples;
     this->lastLayer = lastLayer;
     this->activation_func = activation_func;
     beta_1 = 0.9f;
     beta_2 = 0.999f;
     epsilon = 1e-8f;
-    //allocate memory for all of our device arrays
-    weights = rmm::device_uvector<float>(n_in*n_out, rmm::cuda_stream_default);
-    biases = rmm::device_uvector<float>(n_out, rmm::cuda_stream_default);
-    a = rmm::device_uvector<float>(n_out*samples, rmm::cuda_stream_default);
-    z = rmm::device_uvector<float>(n_out*samples, rmm::cuda_stream_default);
-    delta = rmm::device_uvector<float>(n_in*samples, rmm::cuda_stream_default);
-    weight_gradients = rmm::device_uvector<float>(n_in*n_out, rmm::cuda_stream_default);
-    bias_gradients = rmm::device_uvector<float>(n_out, rmm::cuda_stream_default);
-    m_weights = rmm::device_uvector<float>(n_in*n_out, rmm::cuda_stream_default);
-    v_weights = rmm::device_uvector<float>(n_in*n_out, rmm::cuda_stream_default);
-    m_biases = rmm::device_uvector<float>(n_out, rmm::cuda_stream_default);
-    v_biases = rmm::device_uvector<float>(n_out, rmm::cuda_stream_default);
-    
 
     
     //zero out this memory (weights aren't zeroed out because they are initialized below)
@@ -102,8 +102,8 @@ const float* Layer::getNextLayer(const float* prevLayer, int batch_size){
         //if its the last layer, we need to apply softmax, so get the softmax sum and then apply softmax
         int threadsPerBlock, numBlocks;
         getThreadsBlocks(threadsPerBlock, numBlocks, n_out*batch_size);
-        rmm::device_uvector<float> sums(batch_size, rmm::cuda_stream_default);
-        rmm::device_uvector<float> maxes(batch_size, rmm::cuda_stream_default);
+        rmm::device_uvector<float> sums(batch_size, default_strm);
+        rmm::device_uvector<float> maxes(batch_size, default_strm);
         CUDA_CHECK(cudaMemset(sums.data(), 0.0, batch_size * sizeof(float)));
         getSoftmaxMaxKernel<<<numBlocks, threadsPerBlock>>>(z.data(), maxes.data(), n_out, batch_size);
         getSoftmaxSumKernel<<<numBlocks, threadsPerBlock>>>(z.data(), sums.data(), maxes.data(), n_out, batch_size);

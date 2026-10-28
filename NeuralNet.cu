@@ -11,9 +11,16 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/cuda_stream_view.hpp> 
+#include "Stream.h"
 
 
-NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>& data, std::vector<float>& outputs, Activation_funcs activation_func){
+NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>& data, std::vector<float>& outputs, Activation_funcs activation_func)
+:inputs(inputSize*numSamples, default_strm),
+predictions(outputSize*numSamples, default_strm),
+correctOutputs(outputSize*numSamples, default_strm),
+startingDelta(outputSize*numSamples, default_strm),
+transposed_batch(0, default_strm)
+{
     this->numSamples = numSamples;
     this->outputSize = outputSize;
     this->inputSize = inputSize;
@@ -26,6 +33,7 @@ NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize
     CUBLAS_CHECK(cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH));
     Layer::handle = handle;
     batch_size = 64;
+    transposed_batch.resize(inputSize*batch_size, default_strm);
     //create input layer weights
     layers.reserve(numHiddenLayers + 1);
     layers.push_back(Layer(inputSize, nodesPerHiddenLayer, numSamples, false, activation_func, 0));
@@ -37,20 +45,9 @@ NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize
     }
     //create weights that take us to output layer
     layers.push_back(Layer(nodesPerHiddenLayer, outputSize, numSamples, true, activation_func, i + 1));
-    //get values of first layer onto GPU
-    inputs = rmm::device_uvector<float>(inputSize*numSamples, rmm::cuda_stream_default);
     CUDA_CHECK(cudaMemcpy(inputs.data(), data.data(), inputSize * numSamples * sizeof(float), cudaMemcpyHostToDevice));
-    //get predictions onto gpu (itll start as empty because we haven't done a forward pass
-    predictions = rmm::device_uvector<float>(outputSize*numSamples, rmm::cuda_stream_default);
-    CUDA_CHECK(cudaMemset(predictions.data(), 0, outputSize*numSamples*sizeof(float)));
     //get outputs onto GPU
-    correctOutputs = rmm::device_uvector<float>(outputSize*numSamples, rmm::cuda_stream_default);
     CUDA_CHECK(cudaMemcpy(correctOutputs.data(), outputs.data(), outputSize*numSamples*sizeof(float), cudaMemcpyHostToDevice));
-    //get starting delta allocated
-    startingDelta = rmm::device_uvector<float>(outputSize*numSamples, rmm::cuda_stream_default);
-    CUDA_CHECK(cudaMemset(startingDelta.data(), 0, outputSize*numSamples*sizeof(float)));
-    //buffer for transposing each batch from (batch_size x inputSize) to (inputSize x batch_size)
-    transposed_batch = rmm::device_uvector<float>(inputSize*batch_size, rmm::cuda_stream_default);
     //make host side inputs and outputs, without making copies because these could be very large
     h_inputs = std::move(data);
     h_outputs = std::move(outputs);
@@ -87,8 +84,9 @@ void NeuralNet::getStartingDelta(const float* batch_output){
 
 
 void NeuralNet::getCost(const float* batch_output){
-    //init cost
-    rmm::device_scalar<float> cost(0.0f, rmm::cuda_stream_default);
+    //init cost (yes it is this verbose just to get a 0.0 value onto the gpu)
+    rmm::device_scalar<float> cost(default_strm);
+    cost.set_value_to_zero_async(default_strm);
     
     //get threads per block and number of blocks
     int threadsPerBlock, numBlocks;
@@ -96,7 +94,7 @@ void NeuralNet::getCost(const float* batch_output){
 
     //call cost kernel
     costKernel<<<numBlocks, threadsPerBlock>>>(predictions.data(), batch_output, cost.data(), batch_size, outputSize);
-    curr_cost = cost.value(rmm::cuda_stream_default);
+    curr_cost = cost.value(default_strm);
 }
 
 void NeuralNet::getAllDeltas(){
@@ -176,10 +174,10 @@ void NeuralNet::train(){
 
 //predict an output by running a forward pass
 std::vector<float> NeuralNet::predict(const std::vector<float>& prediction_inputs, int num_predictions){
-    rmm::device_uvector<float> raw_input(prediction_inputs.size(), rmm::cuda_stream_default);
+    rmm::device_uvector<float> raw_input(prediction_inputs.size(), default_strm);
     CUDA_CHECK(cudaMemcpy(raw_input.data(), prediction_inputs.data(), prediction_inputs.size()*sizeof(float), cudaMemcpyHostToDevice));
     // Transpose from sample-major (num_predictions x inputSize) to feature-major (inputSize x num_predictions)
-    rmm::device_uvector<float> transposed_pred(inputSize*num_predictions, rmm::cuda_stream_default);
+    rmm::device_uvector<float> transposed_pred(inputSize*num_predictions, default_strm);
     transposeMatrix(raw_input.data(), transposed_pred.data(), num_predictions, inputSize);
     //same logic as forward pass
     const float* prev = layers[0].getNextLayer(transposed_pred.data(), num_predictions);
@@ -189,7 +187,7 @@ std::vector<float> NeuralNet::predict(const std::vector<float>& prediction_input
         prev = curr;
     }
     // Transpose result from feature-major (outputSize x num_predictions) to sample-major (num_predictions x outputSize)
-    rmm::device_uvector<float> transposed_out(outputSize*num_predictions, rmm::cuda_stream_default);
+    rmm::device_uvector<float> transposed_out(outputSize*num_predictions, default_strm);
     transposeMatrix(prev, transposed_out.data(), outputSize, num_predictions);
     std::vector<float> outVec(outputSize*num_predictions);
     CUDA_CHECK(cudaMemcpy(outVec.data(), transposed_out.data(), outputSize*num_predictions*sizeof(float), cudaMemcpyDeviceToHost));

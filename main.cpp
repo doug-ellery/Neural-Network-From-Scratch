@@ -4,15 +4,15 @@
 #include "NeuralNet.h"
 #include "DataProcessing.h"
 #include "MyMatrix.h"
-#include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
+#include <rmm/mr/per_device_resource.hpp>
 
 int main() {
     //initialize memory pool
     rmm::mr::cuda_memory_resource cuda_mr;
-    rmm::mr::pool_memory_resource<rmm::mr::cuda_memory_resource> pool_mr{&cuda_mr};
-    rmm::mr::set_current_device_resource(&pool_mr);
+    rmm::mr::pool_memory_resource pool_mr{cuda_mr, rmm::percent_of_free_device_memory(50), std::nullopt};
+    rmm::mr::set_current_device_resource(pool_mr);
 
     std::vector<float> train_images = get_MNIST_Images("train-images-idx3-ubyte");
     std::vector<float> train_labels = get_MNIST_Labels("train-labels-idx1-ubyte");

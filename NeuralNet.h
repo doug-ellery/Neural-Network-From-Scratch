@@ -11,7 +11,6 @@
 #define NEURALNET_H
 
 class NeuralNet{
-    
     rmm::device_uvector<float> inputs, predictions, correctOutputs, startingDelta, transposed_batch;
     float learning_rate, curr_cost;
     int numSamples, outputSize, inputSize, batch_size;
