@@ -71,7 +71,7 @@ Layer::Layer(int nodesThisLayer, int nodesNextLayer, int numSamples, bool lastLa
 //return the values for this layer
 //note that prevLayer should be the attribute "a" for the previous layer
 
-const float* Layer::getNextLayer(const float* const prevLayer, int batch_size){
+const float* Layer::getNextLayer(const float* prevLayer, int batch_size){
     //multiply weights x prevLayer first, store it in preactivation (z)
     cudaMultiply(weights.data(), prevLayer, z.data(), n_out, batch_size, n_in, handle);
     CUDA_CHECK(cudaDeviceSynchronize());
@@ -112,7 +112,7 @@ const float* Layer::getNextLayer(const float* const prevLayer, int batch_size){
 
 //get the previous delta given the delta of the layer after this one
 //using RELU -> second ptr is z_l, using tanh -> second ptr is a_l
-const float* Layer::getDelta(const float* const deltaLPlusOne, const float* const z_l_or_a_l, int batch_size){
+const float* Layer::calculateDelta(const float* deltaLPlusOne, const float* z_l_or_a_l, int batch_size){
     //compute weights^T*delta^l+1 first, where M = n_in, K = n_out, N = samples
     cudaMultiply(weights.data(), deltaLPlusOne, delta.data(), n_in, batch_size, n_out, handle, CUBLAS_OP_T, CUBLAS_OP_N);
     int threadsPerBlock, numBlocks;
@@ -131,16 +131,10 @@ const float* Layer::getDelta(const float* const deltaLPlusOne, const float* cons
     return delta.data();
 }
 
-//getter for the preactivation, which is needed so the neural network can give z from one 
-//layer to another for the delta calculation
-const float* Layer:: getZ(){
-    return z.data();
-}
-
 
 //gradient functions, important note: I needed to get passed delta_l because technically 
 //the delta stored in this layer is actually delta_l-1, when using standard layer conventions
-void Layer::getWeightGradients(const float* const delta_l, const float* const a_l_minus_one, int batch_size){
+void Layer::getWeightGradients(const float* delta_l, const float* a_l_minus_one, int batch_size){
     //follow formula: dC/dW_l = delta_l * (a_l-1)^T
     //delta_l = n_out x samples, a_l-1 = n_in x samples
     //thus, M = n_out, K = samples, M = n_in
@@ -151,7 +145,7 @@ void Layer::getWeightGradients(const float* const delta_l, const float* const a_
     scalarMultiplyKernel<<<numBlocks, threadsPerBlock>>>(weight_gradients.data(), 1.0f/batch_size, n_out*n_in);
 }
 
-void Layer::getBiasGradients(const float* const delta_l, int batch_size){
+void Layer::getBiasGradients(const float* delta_l, int batch_size){
     //get rid of previous bias gradient so that the column sum doesn't add to this
     CUDA_CHECK(cudaMemset(bias_gradients.data(), 0.0, n_out*sizeof(float)));
     int threadsPerBlock, numBlocks;
@@ -162,12 +156,17 @@ void Layer::getBiasGradients(const float* const delta_l, int batch_size){
     getThreadsBlocks(threadsPerBlock, numBlocks, n_out);
     scalarMultiplyKernel<<<numBlocks, threadsPerBlock>>>(bias_gradients.data(), 1.0f/batch_size, n_out);
 }
+//getter for the preactivation, which is needed so the neural network can give z from one 
+//layer to another for the delta calculation
+const float* Layer:: getZ() const{
+    return z.data();
+}
 
-const float* Layer::getActivation(){
+const float* Layer::getActivation() const{
     return a.data();
 }
 
-const float* Layer::returnDelta(){
+const float* Layer::getDelta() const{
     return delta;
 }
 

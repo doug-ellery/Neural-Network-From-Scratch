@@ -20,15 +20,15 @@ class Layer{
         Layer(int, int, int, bool, Activation_funcs, int);
         //move constructor
         Layer(Layer&& other) noexcept = default;
-        const float* getNextLayer(const float* const prevLayer, int batch_size);
-        void getWeightGradients(const float* const delta_l, const float* const  a_l_minus_one, int batch_size);
-        void getBiasGradients(const float* const delta_l, int batch_size);
-        const float * getActivation();
-        const float* getDelta(const float* const deltaLPlusOne, const float* const z_l, int batch_size);
-        const float * returnDelta();
-        const float* getZ();
-        void updateWeights(float learning_rate, int t);
-        void updateBiases(float learning_rate, int t);
+        const float* getNextLayer(const float*, int);
+        void getWeightGradients(const float*, const float*, int);
+        void getBiasGradients(const float*, int);
+        const float * getActivation() const;
+        const float* calculateDelta(const float*, const float*, int);
+        const float * getDelta() const;
+        const float* getZ() const;
+        void updateWeights(float, int);
+        void updateBiases(float, int);
         ~Layer();
 
         //Don't allow layers to be copied, this causes wierd stuff to happen because we 

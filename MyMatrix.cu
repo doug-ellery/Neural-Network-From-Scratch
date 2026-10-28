@@ -9,7 +9,7 @@
 
 
 //multiply two matrices A and B, where A = M x K, B = K x N
-void cudaMultiply(const float* const A, const float* const B, float* d_C, int M, int N, int K, cublasHandle_t handle, cublasOperation_t opA, cublasOperation_t opB){
+void cudaMultiply(const float* A, const float* B, float* d_C, int M, int N, int K, cublasHandle_t handle, cublasOperation_t opA, cublasOperation_t opB){
 
     //output array d_C = M x N
     CUDA_CHECK(cudaMemset(d_C, 0, M*N*sizeof(float)));
@@ -70,7 +70,7 @@ void getThreadsBlocks(int& threadsPerBlock, int& numBlocks, int size){
 //total size of A in A + B = size, A = m x n, but I only need n to extract the row index from
 //it 
 
-static __global__ void addKernel(float* A, const float* const B, int size, int n){
+__global__ void addKernel(float* A, const float* B, int size, int n){
     int index, jump;
     getIndexJump(index, jump);
     int row = -1;
@@ -87,7 +87,7 @@ static __global__ void addKernel(float* A, const float* const B, int size, int n
 //identical columns, because it will be N columns of the biases for a given layer, which I
 //need for broadcasting in order to pull off the vectorization
 //Result is stored in A, so that no extra memory is used
-void cudaAdd(float* A, const float* const B, int M, int N){
+void cudaAdd(float* A, const float* B, int M, int N){
 
     int threadsPerBlock, numBlocks;
     getThreadsBlocks(threadsPerBlock, numBlocks, M*N);
@@ -162,7 +162,7 @@ void cudaReLUActivation(float* A, int size){
 
 //Kernel for calculating the cost function, using cross entropy
 
-__global__ void costKernel(float* predictions, float* correctOnes, float* cost, int numSamples, int outputSize){
+__global__ void costKernel(const float* predictions, const float* correctOnes, float* cost, int numSamples, int outputSize){
     int index, jump;
     getIndexJump(index, jump);
     for(int i = index; i < numSamples*outputSize; i += jump){
@@ -176,7 +176,7 @@ __global__ void costKernel(float* predictions, float* correctOnes, float* cost, 
 
 //kernel to get my deltas for the ouput layer, because I am doing batching, this array is
 // numNodes x numSamples, as opposed to just numNodes
-__global__ void startingDeltaKernel(float* predictions, float* correctOnes, float* startingDeltas, int batch_size, int output_size){
+__global__ void startingDeltaKernel(const float* predictions, const float* correctOnes, float* startingDeltas, int batch_size, int output_size){
     int index, jump;
     getIndexJump(index, jump);
     for(int i = index; i < batch_size*output_size; i+= jump){
@@ -190,7 +190,7 @@ __global__ void startingDeltaKernel(float* predictions, float* correctOnes, floa
 
 //kernel to apply relu derivative to the matrix produced from calculating W^t * delta^l+1,
 //to give us our delta^1
-__global__ void reluPrimeKernel(float* z, float* deltaL, int n_in, int numSamples){
+__global__ void reluPrimeKernel(const float* z, float* deltaL, int n_in, int numSamples){
     int index, jump;
     getIndexJump(index, jump);
     for(int i = index; i < n_in*numSamples; i+= jump){
@@ -201,19 +201,10 @@ __global__ void reluPrimeKernel(float* z, float* deltaL, int n_in, int numSample
     }
 }
 
-//helper function to print matrices that are stored as 1D arrays but are of dimension M x N
-void printVec(std::vector<float> vec, int M, int N){
-    for(int r = 0; r < M; r++){
-        for(int c = 0; c < N; c++){
-            std::cout<<vec[r*N + c]<<" ";
-        }
-        std::cout<<"\n";
-    }
-}
 //input = rows x cols, output = rows x 1
 //column sum sums up all items in the same ROW, visiting each column.
 //Assuming output was zero intiialized 
-__global__ void columnSumKernel(float * input, float * output, int rows, int cols){
+__global__ void columnSumKernel(const float* input, float* output, int rows, int cols){
     int index, jump;
     getIndexJump(index, jump);
     for(int i = index; i < rows*cols; i += jump){
@@ -223,7 +214,7 @@ __global__ void columnSumKernel(float * input, float * output, int rows, int col
 }
 
 //for multiplying a matrix by a scalar value, which mutliplies each individual item
-__global__ void scalarMultiplyKernel(float * mat, float scalar, int size){
+__global__ void scalarMultiplyKernel(float* mat, float scalar, int size){
     int index, jump;
     getIndexJump(index, jump);
     for(int i = index; i < size; i += jump){
@@ -232,7 +223,7 @@ __global__ void scalarMultiplyKernel(float * mat, float scalar, int size){
 }
 
 //for updating either the weights or biases after running back prop
-__global__ void updateParameterKernel(float * params, float * gradient, float learning_rate, int size, float * momentum, float * variance, float beta_1, float beta_2, float epsilon, int t){
+__global__ void updateParameterKernel(float* params, const float* gradient, float learning_rate, int size, float* momentum, float* variance, float beta_1, float beta_2, float epsilon, int t){
     int index, jump;
     getIndexJump(index, jump);
     for(int i = index; i < size; i += jump){
@@ -277,7 +268,7 @@ void cudaTanhActivation(float* A, int size){
     tanhActivationKernel<<<numBlocks, threadsPerBlock>>>(A, size);
 }
 
-__global__ void tanhPrimeKernel(float * a, float* delta_l, int n_in, int samples){
+__global__ void tanhPrimeKernel(const float* a, float* delta_l, int n_in, int samples){
     int index, jump;
     getIndexJump(index, jump);
     for(int i = index; i < n_in*samples; i += jump){
@@ -286,7 +277,7 @@ __global__ void tanhPrimeKernel(float * a, float* delta_l, int n_in, int samples
 }
 
 //find the max value per sample (column) for numerical stability in softmax
-__global__ void getSoftmaxMaxKernel(float * z, float * maxes, int rows, int cols){
+__global__ void getSoftmaxMaxKernel(const float* z, float* maxes, int rows, int cols){
     int index, jump;
     getIndexJump(index, jump);
     for(int col = index; col < cols; col += jump){
@@ -299,7 +290,7 @@ __global__ void getSoftmaxMaxKernel(float * z, float * maxes, int rows, int cols
 }
 
 //to get the sum of all e^(z_j - max) which is needed for numerically stable softmax
-__global__ void getSoftmaxSumKernel(float * z, float * sums, float * maxes, int rows, int cols){
+__global__ void getSoftmaxSumKernel(const float* z, float* sums, const float* maxes, int rows, int cols){
     int index, jump;
     getIndexJump(index, jump);
     for(int i = index; i < rows*cols; i += jump){
@@ -309,7 +300,7 @@ __global__ void getSoftmaxSumKernel(float * z, float * sums, float * maxes, int 
 }
 
 //softmax activation to turn outputs into a probability distribution that sums to 1.0
-__global__ void softmaxActivationKernel(float * a, float * sums, float * maxes, int rows, int cols){
+__global__ void softmaxActivationKernel(float* a, const float* sums, const float* maxes, int rows, int cols){
     int index, jump;
     getIndexJump(index, jump);
     for(int i = index; i < rows*cols; i += jump){
@@ -319,7 +310,7 @@ __global__ void softmaxActivationKernel(float * a, float * sums, float * maxes, 
 }
 
 // Transpose a rows x cols matrix (row-major) into a cols x rows matrix (row-major)
-__global__ void transposeKernel(float* in, float* out, int rows, int cols){
+__global__ void transposeKernel(const float* in, float* out, int rows, int cols){
     int index, jump;
     getIndexJump(index, jump);
     for(int i = index; i < rows*cols; i += jump){
@@ -329,7 +320,7 @@ __global__ void transposeKernel(float* in, float* out, int rows, int cols){
     }
 }
 
-void transposeMatrix(float* in, float* out, int rows, int cols){
+void transposeMatrix(const float* in, float* out, int rows, int cols){
     int threadsPerBlock, numBlocks;
     getThreadsBlocks(threadsPerBlock, numBlocks, rows*cols);
     transposeKernel<<<numBlocks, threadsPerBlock>>>(in, out, rows, cols);

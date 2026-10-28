@@ -23,14 +23,14 @@ class NeuralNet{
     std::vector<Layer> layers;
 
     public:
-        NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>&, std::vector<float>&, Activation_funcs);
-        std::vector<float> forwardPass(float * batch_input);
-        void NeuralNet::getStartingDelta(float * batch_output);
-        void getCost(float* batch_output);
+        NeuralNet(int, int, int, int, int, std::vector<float>&, std::vector<float>&, Activation_funcs);
+        void forwardPass(const float*);
+        void getStartingDelta(const float*);
+        void getCost(const float*);
         void getAllDeltas();
-        void backProp(int t, float* batch_input, float* batch_output);
+        void backProp(int, const float*, const float*);
         void train();
-        std::vector<float> predict(std::vector<float> prediction_inputs, int num_predictions);
+        std::vector<float> predict(const std::vector<float>&, int);
         ~NeuralNet();
 
         //Delete copying operators for this class
