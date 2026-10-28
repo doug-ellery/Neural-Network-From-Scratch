@@ -1,6 +1,8 @@
 #include <vector>
 #include <string>
 #include <cublas_v2.h>
+#include <rmm/device_uvector.hpp>
+#include "MyMatrix.h"
 
 
 #ifndef LAYER_H
@@ -29,10 +31,8 @@ class Layer{
         const float* getZ() const;
         void updateWeights(float, int);
         void updateBiases(float, int);
-        ~Layer();
 
-        //Don't allow layers to be copied, this causes wierd stuff to happen because we 
-        //have raw pointers that we use to free cuda memory, we want these pointers to ALWAYS be unique
+        //Don't allow layers to be copied, use std::move
         Layer(const Layer&) = delete;
         Layer& operator=(const Layer&) = delete;
 };

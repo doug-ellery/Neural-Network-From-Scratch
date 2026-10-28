@@ -3,6 +3,8 @@
 #include <string>
 #include <cublas_v2.h>
 #include <random>
+#include <rmm/device_uvector.hpp>
+#include "MyMatrix.h"
 
 
 #ifndef NEURALNET_H

@@ -5,6 +5,8 @@
 #include <ctime>
 #include <cuda_runtime.h>
 #include <string>
+#include <rmm/device_uvector.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 cublasHandle_t Layer::handle;
 
@@ -102,7 +104,7 @@ const float* Layer::getNextLayer(const float* prevLayer, int batch_size){
         getThreadsBlocks(threadsPerBlock, numBlocks, n_out*batch_size);
         rmm::device_uvector<float> sums(batch_size, rmm::cuda_stream_default);
         rmm::device_uvector<float> maxes(batch_size, rmm::cuda_stream_default);
-        CUDA_CHECK(cudaMemset(sums.data, 0.0, batch_size * sizeof(float)));
+        CUDA_CHECK(cudaMemset(sums.data(), 0.0, batch_size * sizeof(float)));
         getSoftmaxMaxKernel<<<numBlocks, threadsPerBlock>>>(z.data(), maxes.data(), n_out, batch_size);
         getSoftmaxSumKernel<<<numBlocks, threadsPerBlock>>>(z.data(), sums.data(), maxes.data(), n_out, batch_size);
         softmaxActivationKernel<<<numBlocks, threadsPerBlock>>>(a.data(), sums.data(), maxes.data(), n_out, batch_size);
@@ -167,7 +169,7 @@ const float* Layer::getActivation() const{
 }
 
 const float* Layer::getDelta() const{
-    return delta;
+    return delta.data();
 }
 
 //updating weights after backprop
@@ -186,8 +188,6 @@ void Layer::updateBiases(float learning_rate, int t){
     updateParameterKernel<<<numBlocks, threadsPerBlock>>>(biases.data(), bias_gradients.data(), learning_rate, n_out, m_biases.data(), v_biases.data(), beta_1, beta_2, epsilon, t);
 }
 
-
-Layer::~Layer(){}
 
 
 

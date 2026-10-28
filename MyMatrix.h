@@ -35,11 +35,11 @@ enum Activation_funcs{
     Tanh
 };
 
-void cudaMultiply(const float*, const float*, float*, int, int, int, cublasHandle_t, cublasOperation_t, cublasOperation_t);
+void cudaMultiply(const float*, const float*, float*, int, int, int, cublasHandle_t, cublasOperation_t opA = CUBLAS_OP_N, cublasOperation_t opB = CUBLAS_OP_N);
 __device__ void getIndexJump(int&, int&);
 void getThreadsBlocks(int&, int&, int);
 void cudaAdd(float*, const float*, int, int);
-__global__ void addKernel(float*, const float*, int, int)
+__global__ void addKernel(float*, const float*, int, int);
 __global__ void weightHeInitializeKernel(float*, int, int, unsigned long);
 __global__ void weightXavierInitializeKernel(float*, int, int, unsigned long);
 __global__ void reluActivationKernel(float*, int);
@@ -55,7 +55,7 @@ void cudaTanhActivation(float*, int);
 __global__ void tanhPrimeKernel(const float*, float*, int, int);
 __global__ void getSoftmaxMaxKernel(const float*, float*, int, int);
 __global__ void getSoftmaxSumKernel(const float*, float*, const float*, int, int);
-__global__ void softmaxActivationKernel(float*, const float*, const float*, int, int)
+__global__ void softmaxActivationKernel(float*, const float*, const float*, int, int);
 __global__ void transposeKernel(const float*, float*, int, int);
 void transposeMatrix(const float*, float*, int, int);
 
