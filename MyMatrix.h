@@ -39,24 +39,24 @@ void cudaMultiply(const float*, const float*, float*, int, int, int, cublasHandl
 __device__ void getIndexJump(int&, int&);
 void getThreadsBlocks(int&, int&, int);
 void cudaAdd(float*, const float*, int, int);
-__global__ void addKernel(float*, const float*, int, int);
+__global__ void addKernel(float* __restrict__, const float* __restrict__, int, int);
 __global__ void weightHeInitializeKernel(float*, int, int, unsigned long);
 __global__ void weightXavierInitializeKernel(float*, int, int, unsigned long);
 __global__ void reluActivationKernel(float*, int);
 void cudaReLUActivation(float*, int);
-__global__ void costKernel(const float*, const float*, float*, int, int);
-__global__ void startingDeltaKernel(const float*, const float*, float*, int, int);
-__global__ void reluPrimeKernel(const float*, float*, int, int);
-__global__ void columnSumKernel(const float*, float*, int, int);
+__global__ void costKernel(const float* __restrict__, const float* __restrict__, float* __restrict__, int, int);
+__global__ void startingDeltaKernel(const float* __restrict__, const float* __restrict__, float*, int, int);
+__global__ void reluPrimeKernel(const float* __restrict__, float* __restrict__, int, int);
+__global__ void columnSumKernel(const float* __restrict__, float* __restrict__, int, int);
 __global__ void scalarMultiplyKernel(float*, float, int);
-__global__ void updateParameterKernel(float*, const float*, float, int, float*, float*, float, float, float, int);
+__global__ void updateParameterKernel(float* __restrict__, const float* __restrict__, float, int, float* __restrict__, float* __restrict__, float, float, float, int);
 __global__ void tanhActivationKernel(float*, int);
 void cudaTanhActivation(float*, int);
-__global__ void tanhPrimeKernel(const float*, float*, int, int);
-__global__ void getSoftmaxMaxKernel(const float*, float*, int, int);
-__global__ void getSoftmaxSumKernel(const float*, float*, const float*, int, int);
-__global__ void softmaxActivationKernel(float*, const float*, const float*, int, int);
-__global__ void transposeKernel(const float*, float*, int, int);
+__global__ void tanhPrimeKernel(const float* __restrict__, float* __restrict__, int, int);
+__global__ void getSoftmaxMaxKernel(const float* __restrict__, float* __restrict__, int, int);
+__global__ void getSoftmaxSumKernel(const float* __restrict__, float* __restrict__, const float* __restrict__, int, int);
+__global__ void softmaxActivationKernel(float* __restrict__, const float* __restrict__, const float* __restrict__, int, int);
+__global__ void transposeKernel(const float* __restrict__, float* __restrict__, int, int);
 void transposeMatrix(const float*, float*, int, int);
 
 
