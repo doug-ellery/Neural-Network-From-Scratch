@@ -24,7 +24,7 @@ class NeuralNet{
     public:
         NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>&, std::vector<float>&, std::string);
         std::vector<float> forwardPass(float * batch_input);
-        void NeuralNet::getStartingDelta(float * batch_output);
+        void getStartingDelta(float * batch_output);
         void getCost(float* batch_output);
         void getAllDeltas();
         void backProp(int t, float* batch_input, float* batch_output);

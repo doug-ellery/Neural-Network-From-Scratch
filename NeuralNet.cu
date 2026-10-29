@@ -8,6 +8,7 @@
 #include <cublas_v2.h>
 #include <numeric>
 #include <random>
+#include <algorithm>
 
 
 NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>& data, std::vector<float>& outputs, std::string activation_func){
