@@ -12,6 +12,8 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/cuda_stream_view.hpp> 
 #include "Stream.h"
+#include <algorithm>
+#include <execution>
 
 
 NeuralNet::NeuralNet(int numHiddenLayers, int nodesPerHiddenLayer, int inputSize, int outputSize, int numSamples, std::vector<float>& data, std::vector<float>& outputs, Activation_funcs activation_func)
@@ -147,13 +149,15 @@ void NeuralNet::train(){
         //use these shuffled indices to shuffle the arrays using std::copy
         //we aren't necessarily just moving one number over, we are copying one input/output 
         //sample at a time, which is inputSize and outputSize number of elements
-        for(int i = 0; i < numSamples; i++){
-            //the index for the random samples that we want to copy into the i'th sample in
-            //shuffled_inputs/outputs
-            int src = h_inputs_indices[i];
+        //using std::for_each & std::execution::par to parallelize over 60000 samples
+        std::for_each(std::execution::par, h_inputs_indices.begin(), h_inputs_indices.end(), 
+        //copy logic
+        [&](const int& src){
+            //ptr arithmetic to figure out what index in h_inputs_indices we are at
+            size_t i = &src - h_inputs_indices.data();
             std::copy(h_inputs.begin() + src * inputSize, h_inputs.begin() + src * inputSize + inputSize, shuffled_inputs.begin() + i * inputSize);
             std::copy(h_outputs.begin() + src * outputSize, h_outputs.begin() + src * outputSize + outputSize, shuffled_outputs.begin() + i * outputSize);
-        }
+        });
         //copy the shuffled versions of inputs and outputs onto the GPU
         CUDA_CHECK(cudaMemcpy(inputs.data(), shuffled_inputs.data(), inputSize * numSamples * sizeof(float), cudaMemcpyHostToDevice));
         CUDA_CHECK(cudaMemcpy(correctOutputs.data(), shuffled_outputs.data(), outputSize * numSamples * sizeof(float), cudaMemcpyHostToDevice));

@@ -5,6 +5,8 @@ project(run LANGUAGES CXX CUDA)
 # Find CUDA toolkit (for cublas, curand) & RMM
 find_package(CUDAToolkit REQUIRED)
 find_package(rmm REQUIRED)
+#for std::execution::par to work
+find_package(TBB REQUIRED)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CUDA_STANDARD 20)
@@ -20,10 +22,11 @@ add_executable(run
     MyMatrix.cu 
 )
 
-# Link CUDA libraries & RMM
+# Link CUDA libraries, RMM, and TBB
 target_link_libraries(run
     PRIVATE
     CUDA::cublas
     CUDA::curand
     rmm::rmm
+    TBB::tbb
 )
