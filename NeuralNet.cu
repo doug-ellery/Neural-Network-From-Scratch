@@ -32,7 +32,7 @@ transposed_batch(0, default_strm)
     //Enable tensor cores to be used
     CUBLAS_CHECK(cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH));
     Layer::handle = handle;
-    batch_size = 64;
+    batch_size = 1024;
     transposed_batch.resize(inputSize*batch_size, default_strm);
     //create input layer weights
     layers.reserve(numHiddenLayers + 1);
